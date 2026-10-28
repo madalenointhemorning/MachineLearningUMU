@@ -1,0 +1,32 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Modelos serializados (pueden ser pesados)
+models/*
+!models/.gitkeep
+
+# LaTeX (ficheros auxiliares de compilación)
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+
+# Sistema / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

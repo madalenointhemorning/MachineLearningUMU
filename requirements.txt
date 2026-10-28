@@ -1,0 +1,3 @@
+# Dependencias del proyecto con versiones EXACTAS (libreria==version).
+# TODO: rellenar desde el entorno virtual con `pip freeze > requirements.txt`
+# una vez instaladas las librerias que se usen.

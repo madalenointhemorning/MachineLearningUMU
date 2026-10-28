@@ -61,3 +61,29 @@ El proyecto se organiza bajo una estructura modular orientada a la reproducibili
 ├── environment.yml                # Configuración del entorno Conda (alternativa)
 ├── requirements.txt               # Fichero de dependencias fijadas (versiones exactas)
 └── README.md                      # Documento principal del repositorio
+
+==================================================
+
+herramienta:
+Claude Code (modelo Claude Opus 5.5, claude-opus-5-5), CLI en Windows - 2026-10-28
+
+prompt:
+lee el proyecto y recomiendame una estructura para los archivos, crea los archivos y las carpetas necesarias, pero ni se te ocurra resolverlos, e incluye esta interacción al Uso_IA
+
+respuesta:
+Tras leer el enunciado, las instrucciones de entrega, el dataset y el README, propuso y creó la siguiente estructura (solo esqueletos vacíos, sin resolver ningún apartado):
+
+- data/raw/            -> se movió aquí enfermedad_cardiovascular.csv (git mv)
+- data/processed/      -> vacío (.gitkeep)
+- notebooks/           -> 01_eda, 02_preprocesamiento, 03_modelado, 04_evaluacion, 05_test_estadisticos (.ipynb), cada uno solo con títulos de sección y celdas "# TODO"
+- src/                 -> __init__, config, data_loader, preprocessing, models, evaluation, statistical_tests (.py), solo con un docstring que describe su responsabilidad y "TODO"
+- results/figures/, results/tables/, models/ -> vacíos (.gitkeep)
+- docs/decisiones.md   -> tabla para registrar decisiones de diseño y avances
+- docs/memoria/, docs/uso_etico_ia/ -> vacíos (.gitkeep)
+- docs/video.md        -> plantilla para el enlace del vídeo
+- requirements.txt     -> vacío, con instrucciones para rellenarlo con pip freeze
+- .gitignore           -> entornos virtuales, cachés, checkpoints, modelos y auxiliares de LaTeX
+- README.md            -> se rellenó la sección "Estructura del Repositorio" y se añadió una sección "Reproducción" pendiente
+
+análisis crítico:
+TODO (rellenar por el equipo: qué se acepta, qué se modifica y por qué)
