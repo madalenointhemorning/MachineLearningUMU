@@ -1,0 +1,63 @@
+prompt:
+prepara un archivo README inicial, teniendo en cuenta lo pedido
+
+respuesta:
+
+# Predicción Multiclase de Riesgo Cardiovascular en Población Adulta
+
+> **Máster Universitario en Inteligencia Artificial — Universidad de Murcia (UMU)**  
+> **Asignatura:** Machine Learning | **Curso:** 2026/2027  
+> **Colaboración clínica:** Hospital Morales Meseguer  
+
+---
+
+## 📋 Descripción del Proyecto
+
+Las enfermedades cardiovasculares representan una de las principales causas de morbimortalidad a nivel global. Este proyecto tiene como objetivo diseñar, entrenar y evaluar modelos predictivos de Machine Learning capaces de clasificar con alta precisión y fiabilidad clínica el nivel de riesgo cardiovascular en una cohorte adulta de **2.254 pacientes**.
+
+La variable objetivo (`riesgo_cardiovascular`) contempla tres niveles de estratificación:
+* **Clase 0:** Bajo Riesgo
+* **Clase 1:** Riesgo Moderado
+* **Clase 2:** Alto Riesgo
+
+El repositorio recoge el flujo de trabajo end-to-end: desde el análisis exploratorio de datos (EDA) y la mitigación de problemáticas de calidad del dato (imputación, outliers, desbalanceo, escalado), hasta el ajuste de hiperparámetros, validación cruzada y comparación estadística de clasificadores base y ensambles.
+
+---
+
+## 👥 Integrantes del Equipo
+
+| Nombre y Apellidos | Usuario de GitHub | Correo Institucional |
+| :--- | :--- | :--- |
+| *[Nombre Miembro 1]* | `@usuario1` | `usuario1@um.es` |
+| *[Nombre Miembro 2]* | `@usuario2` | `usuario2@um.es` |
+| *[Nombre Miembro 3]* | `@usuario3` | `usuario3@um.es` |
+
+---
+
+## 📂 Estructura del Repositorio
+
+El proyecto se organiza bajo una estructura modular orientada a la reproducibilidad científica:
+
+```text
+├── data/
+│   ├── raw/                       # Dataset original (enfermedad_cardiovascular.csv)
+│   └── processed/                 # Datasets limpios o transformados (si aplica)
+├── docs/                          # Documentación técnica y entregables
+│   ├── memoria_tecnica.pdf        # Memoria técnica maquetada (máx. 15 páginas)
+│   ├── uso_etico_ia.pdf           # Registro de prompts y reflexión crítica de IA
+│   └── video_link.txt             # Enlace al vídeo explicativo (máx. 7 min)
+├── notebooks/                     # Jupyter Notebooks de desarrollo y análisis
+│   ├── 01_eda_calidad_datos.ipynb # Análisis exploratorio y detección de problemáticas
+│   ├── 02_preprocesamiento.ipynb  # Transformaciones, codificación e imputación
+│   ├── 03_modelado_evaluacion.ipynb# Entrenamiento, ajuste de hiperparámetros y métricas
+│   └── 04_test_estadisticos.ipynb # Comparación estadística de modelos (opcional)
+├── src/                           # Código fuente refactorizado y reutilizable
+│   ├── __init__.py
+│   ├── data_loader.py             # Carga y comprobación de integridad
+│   ├── preprocessing.py          # Pipelines de preprocesamiento (Scikit-Learn)
+│   ├── models.py                  # Definición y pipelines de algoritmos
+│   └── evaluation.py              # Cálculo de métricas y matrices de confusión
+├── .gitignore                     # Filtro de ficheros innecesarios
+├── environment.yml                # Configuración del entorno Conda (alternativa)
+├── requirements.txt               # Fichero de dependencias fijadas (versiones exactas)
+└── README.md                      # Documento principal del repositorio
