@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registro Completo de Interacciones con IA Generativa - Práctica 1 ML (UMU)</title>
+  
+  <!-- Tipografía Latin Modern Roman idéntica a LaTeX (Computer Modern) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/latin-modern-web@1.0.0/style/Latin-Modern-Roman.css">
+  
+  <style>
+    :root {
+      --main-font: "Latin Modern Roman", "Computer Modern", "Times New Roman", Times, Georgia, serif;
+      --code-font: "Courier New", Courier, monospace;
+      --text-color: #111111;
+      --bg-color: #f7f7f9;
+      --paper-bg: #ffffff;
+      --latex-blue: #002b49;
+      --prompt-border: #2c5282;
+      --prompt-bg: #f0f4f8;
+      --prompt-header: #1a365d;
+      --response-border: #718096;
+      --response-bg: #ffffff;
+      --code-bg: #f8f9fa;
+      --code-border: #e2e8f0;
+      --table-border: #000000;
+      --critique-border: #b7791f;
+      --critique-bg: #fffaf0;
+      --critique-header: #744210;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--main-font);
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      line-height: 1.65;
+      font-size: 15px;
+      padding: 30px 15px;
+    }
+
+    .paper-sheet {
+      max-width: 900px;
+      margin: 0 auto;
+      background: var(--paper-bg);
+      padding: 60px 70px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.08);
+      border: 1px solid #e0e0e0;
+    }
+
+    /* Encabezado estilo paper LaTeX */
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+      border-bottom: 1.5px solid #222;
+      padding-bottom: 25px;
+    }
+
+    header .institution {
+      font-size: 13px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-weight: bold;
+      color: #444;
+      margin-bottom: 8px;
+    }
+
+    header h1 {
+      font-size: 24px;
+      font-weight: bold;
+      line-height: 1.3;
+      margin-bottom: 12px;
+      color: #000;
+    }
+
+    header .subtitle {
+      font-size: 16px;
+      font-style: italic;
+      color: #333;
+      margin-bottom: 15px;
+    }
+
+    header .metadata {
+      font-size: 13px;
+      color: #555;
+    }
+
+    /* Abstract / Resumen inicial */
+    .abstract-box {
+      margin: 0 35px 35px 35px;
+      text-align: justify;
+      font-size: 13.5px;
+      line-height: 1.55;
+    }
+
+    .abstract-box strong {
+      display: block;
+      text-align: center;
+      text-transform: uppercase;
+      font-size: 12.5px;
+      letter-spacing: 1.2px;
+      margin-bottom: 6px;
+    }
+
+    /* Títulos numerados estilo \section y \subsection */
+    h2.section-title {
+      font-size: 18px;
+      font-weight: bold;
+      margin: 35px 0 15px 0;
+      border-bottom: 1px solid #777;
+      padding-bottom: 4px;
+      color: #111;
+    }
+
+    h3.subsection-title {
+      font-size: 15.5px;
+      font-weight: bold;
+      margin: 20px 0 10px 0;
+      color: #222;
+    }
+
+    p {
+      margin-bottom: 12px;
+      text-align: justify;
+      text-justify: inter-word;
+    }
+
+    /* Cajas tcolorbox para las interacciones */
+    .interaction-container {
+      margin: 25px 0;
+    }
+
+    /* Prompt del alumno (Estilo tcolorbox azul) */
+    .prompt-box {
+      border: 1px solid var(--prompt-border);
+      border-left: 5px solid var(--prompt-border);
+      background-color: var(--prompt-bg);
+      border-radius: 3px;
+      margin-bottom: 15px;
+      overflow: hidden;
+    }
+
+    .prompt-box .box-header {
+      background-color: var(--prompt-header);
+      color: #ffffff;
+      padding: 6px 14px;
+      font-size: 12.5px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .prompt-box .box-content {
+      padding: 14px 16px;
+      font-size: 14.5px;
+      color: #1a202c;
+      font-style: italic;
+    }
+
+    /* Respuesta de la IA (Estilo tcolorbox gris/formal) */
+    .response-box {
+      border: 1px solid #cbd5e0;
+      border-left: 5px solid #4a5568;
+      background-color: #ffffff;
+      border-radius: 3px;
+      margin-bottom: 15px;
+      overflow: hidden;
+    }
+
+    .response-box .box-header {
+      background-color: #4a5568;
+      color: #ffffff;
+      padding: 6px 14px;
+      font-size: 12.5px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .response-box .box-content {
+      padding: 18px 20px;
+    }
+
+    /* Caja de Análisis Crítico del Alumno (Estilo tcolorbox ámbar) */
+    .critique-box {
+      border: 1px solid var(--critique-border);
+      border-left: 5px solid var(--critique-border);
+      background-color: var(--critique-bg);
+      border-radius: 3px;
+      margin-bottom: 35px;
+      overflow: hidden;
+    }
+
+    .critique-box .box-header {
+      background-color: var(--critique-header);
+      color: #ffffff;
+      padding: 6px 14px;
+      font-size: 12.5px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .critique-box .box-content {
+      padding: 14px 16px;
+      font-size: 14px;
+      color: #2d3748;
+    }
+
+    .critique-box .todo-tag {
+      display: inline-block;
+      background-color: #c53030;
+      color: #ffffff;
+      font-weight: bold;
+      padding: 2px 7px;
+      border-radius: 3px;
+      font-size: 11px;
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+    }
+
+    /* Bloques de código estilo listings / minted */
+    pre {
+      background-color: var(--code-bg);
+      border: 1px solid var(--code-border);
+      border-left: 3px solid #718096;
+      border-radius: 3px;
+      padding: 12px 14px;
+      font-family: var(--code-font);
+      font-size: 12.5px;
+      line-height: 1.45;
+      overflow-x: auto;
+      margin: 14px 0;
+      color: #2d3748;
+    }
+
+    code {
+      font-family: var(--code-font);
+      background-color: #edf2f7;
+      padding: 2px 5px;
+      border-radius: 2px;
+      font-size: 13px;
+      color: #800000;
+    }
+
+    pre code {
+      background-color: transparent;
+      padding: 0;
+      color: inherit;
+    }
+
+    /* Tablas estilo LaTeX booktabs */
+    table.latex-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 18px 0;
+      font-size: 13.5px;
+    }
+
+    table.latex-table th, 
+    table.latex-table td {
+      padding: 7px 12px;
+      text-align: left;
+    }
+
+    table.latex-table thead tr:first-child {
+      border-top: 2px solid var(--table-border);
+      border-bottom: 1.2px solid var(--table-border);
+    }
+
+    table.latex-table tbody tr:last-child {
+      border-bottom: 2px solid var(--table-border);
+    }
+
+    table.latex-table tbody tr {
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    /* Listas con viñetas */
+    ul, ol {
+      margin: 10px 0 14px 25px;
+    }
+
+    li {
+      margin-bottom: 5px;
+    }
+
+    footer {
+      margin-top: 45px;
+      padding-top: 15px;
+      border-top: 1px solid #bbb;
+      text-align: center;
+      font-size: 12px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="paper-sheet">
+    
+    <!-- ENCABEZADO OFICIAL -->
+    <header>
+      <div class="institution">Máster Universitario en Inteligencia Artificial — Universidad de Murcia</div>
+      <h1>Registro Completo de Prompts y Diálogo con Asistente de IA</h1>
+      <div class="subtitle">Anexo al Documento de Uso Ético y Responsable de Inteligencia Artificial (Apartado 4.3)</div>
+      <div class="metadata">
+        <strong>Asignatura:</strong> Machine Learning (Curso 2026/2027) | 
+        <strong>Práctica 1:</strong> Predicción Multiclase de Riesgo Cardiovascular en Población Adulta<br>
+        <strong>Herramienta Empleada:</strong> Google Gemini / Asistente LLM | 
+        <strong>Repositorio:</strong> <code>https://github.com/madalenointhemorning/MachineLearningUMU</code>
+      </div>
+    </header>
+
+    <!-- RESUMEN / ABSTRACT -->
+    <div class="abstract-box">
+      <strong>Declaración de Transparencia Académica</strong>
+      El presente documento constituye el registro fidedigno y cronológico de todas las interacciones realizadas con herramientas de Inteligencia Artificial Generativa durante el desarrollo del EDA. Todas las respuestas técnicas, formulaciones estadísticas y propuestas de código generadas fueron sometidas a contraste empírico, validación clínica y auditoría crítica por los miembros del equipo antes de su integración definitiva en los scripts y en la memoria técnica.
+    </div>
+
+    <!-- SECCIÓN 1: INICIO Y PLANIFICACIÓN -->
+    <h2 class="section-title">1. Configuración del Repositorio y Planificación del Proyecto</h2>
+
+    <div class="interaction-container">
+      <div class="prompt-box">
+        <div class="box-header">Prompt 1 — Alumno</div>
+        <div class="box-content">
+          "prepara un archivo README inicial, teniendo en cuenta lo pedido [PDFs del enunciado y normativa de entrega facilitados]"
+        </div>
+      </div>
+
+      <div class="response-box">
+        <div class="box-header">Salida del Asistente (Aceptada con validación)</div>
+        <div class="box-content">
+          <p>Se estructuró el archivo <code>README.md</code> principal del repositorio contemplando rigurosamente todos los estándares fijados en la guía de entrega de la asignatura:</p>
+          <ul>
+            <li>Definición del problema clínico (Hospital Morales Meseguer) y variable objetivo multiclase <code>riesgo_cardiovascular</code> (0, 1, 2).</li>
+            <li>Estructura modular reproducible del repositorio (directorios <code>data/</code>, <code>notebooks/</code>, <code>src/</code>, <code>docs/</code>).</li>
+            <li>Diccionario condensado de las 28 variables clínicas y analíticas.</li>
+            <li>Requisitos mínimos de modelos (al menos 2 lineales y 3 ensambles) y esquema de validación sin fuga de datos.</li>
+            <li>Instrucciones de instalación vía entorno virtual, requisitos de reproducibilidad (<code>RANDOM_STATE = 42</code>) y tabla de seguimiento comparativo de métricas con foco en el coste clínico del error.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="critique-box">
+        <div class="box-header">Análisis Crítico y Validación Humana — Alumno</div>
+        <div class="box-content">
+          <span class="todo-tag">TODO: ANÁLISIS CRÍTICO 1</span>
+          <p><em>Me quedé con la estructura del README, pero no tuve mucho en cuenta la estructura del proyecto, ya que todavía no se había establecido.</em></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCIÓN 2: AUDITORÍA EXPLORATORIA (EDA) -->
+    <h2 class="section-title">2. Diseño del Análisis Exploratorio de Datos (EDA)</h2>
+
+    <div class="interaction-container">
+      <div class="prompt-box">
+        <div class="box-header">Prompt 2 — Alumno</div>
+        <div class="box-content">
+          [Capturas de pantalla del notebook <code>01_eda.ipynb</code> con las celdas # TODO estructuradas y enlace al repositorio oficial]<br>
+          "al final este es mi repositorio, ayudame a hacer el analisis exploratorio para ver como son los datos: https://github.com/madalenointhemorning/MachineLearningUMU"
+        </div>
+      </div>
+
+      <div class="response-box">
+        <div class="box-header">Salida del Asistente (Implementada en el entorno)</div>
+        <div class="box-content">
+          <p>Se construyó la batería de código en Python (usando <code>pandas</code>, <code>seaborn</code> y <code>matplotlib</code>) para rellenar las secciones del notebook siguiendo la guía del usuario: Carga de datos, Descripción general (nulos y duplicados), Análisis Univariante (distribución del target, boxplots para outliers) y Análisis Bivariante con matriz de correlación no paramétrica de Spearman.</p>
+        </div>
+      </div>
+
+      <div class="critique-box">
+        <div class="box-header">Análisis Crítico y Validación Humana — Alumno</div>
+        <div class="box-content">
+          <span class="todo-tag">TODO: ANÁLISIS CRÍTICO 2</span>
+          <p><em>Se fue iterando para ir rellenando cada celda del análisis exploratorio con diferentes gráficas para facilitar la observación de la naturaleza de los datos, teniendo en cuenta los tipos de datos, como los binarios, los numéricos o los enumerables..</em></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCIÓN 3: DISCUSIÓN CRÍTICA DE RESULTADOS -->
+    <h2 class="section-title">3. Análisis Crítico, Correlaciones y Detección de Inconsistencias</h2>
+
+    <div class="interaction-container">
+      <div class="prompt-box">
+        <div class="box-header">Prompt 3 — Alumno (Auditoría Crítica)</div>
+        <div class="box-content">
+          [Se aportan las gráficas de correlación de Spearman, boxplots y el reporte de calidad]<br>
+          "¿por qué se definen estas variables como clave?<br>
+          key_clinical_vars = ['presion_sistolica', 'colesterol_ldl', 'glucosa_ayunas', 'hemoglobina_glicosilada', 'clearance_creatinina', 'proteina_c_reactiva']<br>
+          ¿por qué no se toman las que mayor correlacion tienen con la variable target?<br>
+          además que sentido tiene que hayan outliers con un consume alcohol semanal negativo??"
+        </div>
+      </div>
+
+      <div class="response-box">
+        <div class="box-header">Salida del Asistente y Reflexión Conjunta</div>
+        <div class="box-content">
+          <p><strong>1. Variables Clave vs. Correlación Empírica:</strong> Se reconoció que la lista inicial respondía al criterio médico teórico clásico <em>a priori</em> (factores SCORE/Framingham). El alumno señaló acertadamente que la evidencia empírica del dataset prioriza las variables con mayor correlación real: <code>consumo_alcohol_semanal</code> ($r = +0.39$), <code>proteina_c_reactiva</code> ($r = +0.28$), <code>hemoglobina_glicosilada</code> ($r = +0.28$) y factores protectores como <code>frecuencia_ejercicio_semanal</code> ($r = -0.21$) y <code>colesterol_hdl</code> ($r = -0.20$).</p>
+          <p><strong>2. Valores Negativos en Consumo de Alcohol:</strong> Se confirmó que una ingesta de $-2.5$ o $-5$ consumiciones semanales es biológicamente imposible. Este hallazgo confirmó la presencia intencionada de <em>artefactos de generación sintética</em> o errores de captura, conformando una problemática explícita exigida en el Apartado 3.1.</p>
+        </div>
+      </div>
+
+      <div class="critique-box">
+        <div class="box-header">Análisis Crítico y Validación Humana — Alumno</div>
+        <div class="box-content">
+          <span class="todo-tag">TODO: ANÁLISIS CRÍTICO 3</span>
+          <p><em>Se corrige cierto aspecto del código y, sobre todo, obtenemos las primeras evidencias de la naturaleza del dataset y un aviso para su evaluación exhaustiva, el cual nos lleva a tener cuidado sobre el resto de variables también. Este tipo de identificación de problemáticas son necesarias para garantizar un buen preproceso de los datos.</em></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCIÓN 4: AUDITORÍA FORENSE -->
+    <h2 class="section-title">4. Auditoría Forense y Pruebas Fisiológicas Cruzadas</h2>
+
+    <div class="interaction-container">
+      <div class="prompt-box">
+        <div class="box-header">Prompt 4 y 5 — Alumno</div>
+        <div class="box-content">
+          "pues haz una celda de identificacion de problemas buscando todo este tipo de inconsistencias y asi cambio la final"<br>
+          "a que te refieres con las categorías de alimentación y actividad? ¿por qué la presión diastólica >= sistólica (44 casos) es un error? y dime si pueden haber más inconsistencias para el resto de variables y no hayamos hecho una prueba todavia"
+        </div>
+      </div>
+
+      <div class="response-box">
+        <div class="box-header">Salida del Asistente</div>
+        <div class="box-content">
+          <p>Se desarrolló una batería avanzada de comprobaciones lógicas y fisiopatológicas para detectar anomalías en todo el diccionario de datos:</p>
+          <ul>
+            <li><strong>Presión Arterial Invertida ($PAD \ge PAS$):</strong> Se explicó que hemodinámicamente es imposible en reposo. Los 44 casos corresponden a una transposición de columnas durante la captura (requieren un <em>swap</em> condicional).</li>
+            <li><strong>Codificación Categórica:</strong> Se aclaró la distinción entre variables puramente nominales (requieren <code>OneHotEncoder</code>) y variables con jerarquía de esfuerzo físico intrínseca (<code>nivel_actividad</code>, que requiere <code>OrdinalEncoder</code> mapeado).</li>
+            <li><strong>Batería de Pruebas Cruzadas:</strong> Inclusión pediátrica, coherencia edad/tabaco, congruencia metabólica (glucosa vs HbA1c), y preservación de masa lipídica (Friedewald).</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="critique-box">
+        <div class="box-header">Análisis Crítico y Validación Humana — Alumno</div>
+        <div class="box-content">
+          <span class="todo-tag">TODO: ANÁLISIS CRÍTICO 4</span>
+          <p><em>La respuesta de la IA nos proporcionó varias celdas para probar la consistencia entre diferentes variables del dataset, soportándonos tanto en teoría médica como en las características esperadas de las columnas. Todo esto lo tendremos en cuenta para el preprocesamiento posterior.</em></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCIÓN 5: HALLAZGOS Y EVIDENCIAS FINALES -->
+    <h2 class="section-title">5. Resultados de la Auditoría Integral y Conclusiones Poblacionales</h2>
+
+    <div class="interaction-container">
+      <div class="prompt-box">
+        <div class="box-header">Ejecución y Feedback del Alumno</div>
+        <div class="box-content">
+          Se reportaron los resultados reales tras ejecutar el script sobre el archivo <code>enfermedad_cardiovascular.csv</code>:
+          <pre><code>🔍 1. Tipos discretos con decimales: edad (2046), frecuencia_ejercicio_semanal (1836), anos_fumador (1588)...
+🔍 2. Inicio tabaquismo < 12 años: 21 casos adultos.
+🔍 3. Pacientes < 18 años: 4 casos (Min edad: 9.8).
+🔍 4. Inconsistencia severa IMC vs Perímetro cintura: 57 casos.
+🔍 5. Incoherencia metabólica cruzada (Glucosa vs HbA1c): 1 caso.
+🔍 8. Presión de pulso inverosímil (<15 mmHg): 192 casos (Mín PP: 0.0 mmHg).</code></pre>
+          "sobre los individuos menores de 18, da igual que fumen o beban, no deberian incluirse en el estudio al no ser adultos no? ¿y sobre qué edad se considera a alguien adulto, es igual el cuerpo de una persona de 18 que una de 40 o 50? ¿se dividen en grupos?"
+        </div>
+      </div>
+
+      <div class="response-box">
+        <div class="box-header">Salida del Asistente y Resolución Metodológica</div>
+        <div class="box-content">
+          <p><strong>1. Criterios de Exclusión Poblacional:</strong> Se confirmó que los 4 pacientes menores de 18 años violan el criterio de inclusión estipulado en el título oficial del proyecto (<em>Población Adulta</em>). En epidemiología clínica no procede extrapolar modelos de riesgo adulto a pediatría. Se acordó justificar su exclusión en el preprocesamiento formal.</p>
+          <p><strong>2. Estratificación Etaria en Cardiología:</strong> Se fundamentó con las guías de la Sociedad Europea de Cardiología (ESC) que el riesgo cardiovascular no es lineal con la edad. Se detallaron las cohortes clínicas (Adulto Joven &lt;40, Mediana Edad 40-69 según SCORE2, y Adulto Mayor $\ge$70 según SCORE2-OP), sugiriendo técnicas de <em>Feature Engineering</em> (estratos de edad o interacciones no lineales como <code>edad * presion_sistolica</code>).</p>
+        </div>
+      </div>
+
+      <div class="critique-box">
+        <div class="box-header">Análisis Crítico y Validación Humana — Alumno</div>
+        <div class="box-content">
+          <span class="todo-tag">TODO: ANÁLISIS CRÍTICO 5</span>
+          <p><em>Al discutir los resultados del análisis exploratorio, se identificaron varias inconsistencias en los datos que requieren una validación más detallada y una estrategia de preprocesamiento adecuada. Es posible que podamos incluir un tipo de preprocesamiento donde tengamos en cuenta la agrupación etaria para mejorar la precisión del modelo.</em></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLA RESUMEN PARA LA MEMORIA -->
+    <h2 class="section-title">6. Cuadro de Problemáticas</h2>
+    <p>A partir del proceso de diálogo crítico documentado, se sintetizaron unas problemáticas iniciales que integran el Apartado 3.1 del proyecto y que tendremos en cuenta en el preprocesamiento:</p>
+
+    <table class="latex-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Problemática Identificada</th>
+          <th>Evidencia Empírica en la Cohorte</th>
+          <th>Técnica de Preprocesamiento Justificada</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1</strong></td>
+          <td>Errores de Transposición Hemodinámica</td>
+          <td>44 casos con $PAD \ge PAS$ (1.95%) y 192 casos con $PP < 15\text{ mmHg}$.</td>
+          <td>Inversión posicional condicional (<em>swap</em>) e imputación robusta.</td>
+        </tr>
+        <tr>
+          <td><strong>2</strong></td>
+          <td>Violación de Dominios y Ruido Continuo</td>
+          <td>Valores negativos en alcohol; &gt;90% de variables discretas con decimales.</td>
+          <td>Truncamiento inferior (<em>clipping</em> $\ge 0$) y casteo/redondeo a enteros.</td>
+        </tr>
+        <tr>
+          <td><strong>3</strong></td>
+          <td>Violación de Criterios de Inclusión</td>
+          <td>4 registros pediátricos (&lt; 18 años, mínimo 9.8 años) en población adulta.</td>
+          <td>Filtrado por exclusión de cohorte (población diana $\ge 18$ años).</td>
+        </tr>
+        <tr>
+          <td><strong>4</strong></td>
+          <td>Presencia de Outliers y Asimetría</td>
+          <td>&gt;5% de atípicos en colesterol y ácido úrico; Skewness &gt; 1.2 en PCR y triglicéridos.</td>
+          <td>Escalado no paramétrico con <code>RobustScaler</code> o <code>PowerTransformer</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>5</strong></td>
+          <td>Desbalanceo Multiclase y Asimetría de Coste</td>
+          <td>Distribución 50% - 30% - 20% (Ratio 2.5:1). Alto riesgo vital ante falsos negativos.</td>
+          <td>Sobremuestreo balanceado vía <code>SMOTE</code> o penalización <code>class_weight</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>6</strong></td>
+          <td>Codificación Diferencial Categórica</td>
+          <td>Coexistencia de variables puramente nominales con ordinales jerárquicas.</td>
+          <td><code>OneHotEncoder</code> para nominales y <code>OrdinalEncoder</code> para actividad física.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="critique-box" style="margin-top: 25px;">
+      <div class="box-header">Valoración Global del Equipo — Informe Ético</div>
+      <div class="box-content">
+        <span class="todo-tag">TODO: CONCLUSIÓN ÉTICA FINAL</span>
+        <p><em>La integración de la IA en el proceso de análisis exploratorio ha permitido una identificación más rápida de problemáticas en los datos, pero también ha resaltado la importancia de la validación empírica y la intervención humana en cada etapa del preprocesamiento.</em></p>
+      </div>
+    </div>
+
+    <footer>
+      Documento generado como constancia de uso ético de herramientas de inteligencia artificial. Todos los análisis han sido verificados experimentalmente en Python 3.10 sobre el repositorio del equipo.
+    </footer>
+
+  </div>
+
+</body>
+</html>
