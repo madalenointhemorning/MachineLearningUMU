@@ -276,5 +276,656 @@ with open("salida.txt", "w", encoding="utf-8") as f:
 Se acepta el código para poder visualizar los dataframes que pandas corta por defecto, dejándolo como código para descomentar si se necesita.
 \end{iaanalisis}
 
+
+
+
+\begin{iaprompt}
+cómo se lee una matriz de correlación? hay diferencia a la hora de analizar correlacion entre variables y entre la variable target?
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Para entender una matriz de correlación sin perderte, la regla de oro es
+dividirla en dos zonas completamente distintas:
+
+1.  La relación entre tus variables predictoras y el TARGET (la fila o columna
+    de la variable a predecir).
+2.  La relación entre las variables predictoras ENTRE SÍ (el resto de celdas de
+    la matriz).
+
+Lo que en una zona es excelente, en la otra puede ser un problema grave.
+
+Lo básico: ¿Qué significa el número? (Coeficiente de -1 a 1)
+
+  - Cercano a 1 (Positivo fuerte): Se mueven en la misma dirección. Si el valor
+    de una variable sube, el de la otra también tiende a subir.
+  - Cercano a -1 (Negativo fuerte): Se mueven en direcciones opuestas. Si el
+    valor de una variable sube, el de la otra tiende a bajar (relación inversa).
+  - Cercano a 0: No hay relación lineal/monótona. Lo que le ocurra a una
+    variable no nos dice absolutamente nada sobre el comportamiento de la otra.
+
+Zona 1: Variables Predictoras vs. TARGET
+
+Aquí buscas responder: ¿Esta variable me sirve para predecir lo que quiero
+estimar?
+
+  - ¿Qué buscas aquí? Quieres números lo más alejados de 0 posible (tanto
+    fuertemente positivos como fuertemente negativos).
+      - Un valor alto positivo indica un factor de riesgo o acelerador directo.
+      - Un valor alto negativo indica un factor protector o freno directo. Ambos
+        son igual de útiles para el algoritmo.
+  - ¿Cuándo es "malo" aquí?
+      - Cuando el valor está muy cerca de 0.00.
+      - Significa que esa variable, de forma aislada, apenas tiene poder de
+        asociación con el target. Si todas las variables de un dataset tuvieran
+        correlación cercana a 0 con el objetivo, el modelo difícilmente
+        aprendería un patrón útil.
+
+Zona 2: Variables Predictoras ENTRE SÍ
+
+Aquí buscas responder: ¿Tengo variables repetidas que aportan la misma
+información?
+
+  - ¿Qué buscas aquí? En general, en Machine Learning, quieres números cercanos
+    a 0 (variables independientes entre sí). Esto garantiza que cada columna
+    aporta un dato nuevo y distinto al conjunto.
+  - ¿Cuándo es "malo" aquí?
+      - Cuando dos variables predictoras tienen una correlación muy alta entre
+        sí (típicamente superior a 0.80 o inferior a -0.80). Este fenómeno se
+        conoce como Multicolinealidad.
+      - ¿Por qué es un problema la multicolinealidad?
+        1.  Confunde a ciertos modelos (especialmente lineales como Regresión
+            Lineal o Logística): Los algoritmos no pueden distinguir a cuál de
+            las dos variables atribuirle el peso en la predicción, volviendo los
+            coeficientes matemáticos muy inestables.
+        2.  Introduce redundancia innecesaria: Estás duplicando información sin
+            ganar capacidad predictiva, aumentando el coste computacional del
+            modelo.
+
+Resumen visual: ¿Qué buscar en cada parte de la matriz?
+
+| Zona de la Matriz         | Lo ideal (Lo que quieres ver)                                                                                                      | Lo problemático (Lo que debes vigilar)                                                                                                |
+| :------------------------ | :--------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| **Variable vs. Target**   | **Lejos de 0** (valores altos positivos o negativos, ej. $> 0.25$ o $< -0.25$). Indican buena capacidad para predecir el objetivo. | **Cerca de 0** (ej. entre $-0.05$ y $0.05$). La variable no aporta información relevante de forma individual para predecir el target. |
+| **Variable vs. Variable** | **Cerca de 0** (habitualmente entre $-0.30$ y $0.30$). Cada variable mide aspectos distintos e independientes.                     | **Muy cerca de 1 o -1** (magnitudes $> 0.80$). Hay variables redundantes (**Multicolinealidad**) que pueden desestabilizar el modelo. |
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se acepta la explicación de la tabla de correlación y la explicación de valores a tener en cuenta entre variables vs variables y variables vs target.
+\end{iaanalisis}
+
+
+
+
+
+
+
+\begin{iaprompt}
+\begin{lstlisting}[language=Python]
+
+# ------------------------------------------------------------------------------
+# 1. MATRIZ DE CORRELACIÓN DE SPEARMAN (NUMÉRICAS + TARGET)
+# ------------------------------------------------------------------------------
+plt.figure(figsize=(18, 14))
+corr_matrix = df[NUM_COLS + [TARGET_COL]].corr(method="spearman")
+mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+
+sns.heatmap(
+    corr_matrix,
+    mask=mask,
+    cmap="vlag",
+    center=0,
+    annot=True,
+    fmt=".2f",
+    annot_kws={"size": 8},
+    linewidths=0.5,
+    cbar_kws={"shrink": 0.8},
+)
+plt.title(
+    "Matriz de Correlación de Spearman (Variables Numéricas y Target)",
+    fontsize=14,
+    fontweight="bold",
+    pad=15,
+)
+plt.show()
+
+# ------------------------------------------------------------------------------
+# 2. TOP VARIABLES NUMÉRICAS CON MAYOR PODER DISCRIMINATORIO EMPÍRICO
+# ------------------------------------------------------------------------------
+# Calculamos la correlación de Spearman de cada variable numérica con el target
+# y seleccionamos las 8 de mayor magnitud absoluta (positivas o protectoras/negativas)
+corr_with_target = df[NUM_COLS].corrwith(df[TARGET_COL], method="spearman")
+top_features = corr_with_target.abs().sort_values(ascending=False).head(8).index
+
+print("=" * 70)
+print(
+    "TOP 8 VARIABLES NUMÉRICAS MÁS ASOCIADAS EMPÍRICAMENTE AL RIESGO CARDIOVASCULAR"
+)
+print("=" * 70)
+for feat in top_features:
+    r_val = corr_with_target[feat]
+    tipo = "Factor de Riesgo (+)" if r_val > 0 else "Factor Protector (-)"
+    print(f" • {feat:28s}: Spearman r = {r_val:+.3f}  ({tipo})")
+
+# Visualización mediante Boxplots estratificados por nivel de riesgo
+fig, axes = plt.subplots(2, 4, figsize=(18, 11))
+axes = axes.flatten()
+
+class_labels_short = ["0 (Bajo)", "1 (Moderado)", "2 (Alto)"]
+
+for idx, col in enumerate(top_features):
+    r_val = corr_with_target[col]
+    sns.boxplot(
+        x=TARGET_COL,
+        y=col,
+        data=df,
+        ax=axes[idx],
+        palette="Blues",
+        hue=TARGET_COL,
+        legend=False,
+    )
+    axes[idx].set_title(
+        f"{col}\n(Spearman r = {r_val:+.2f})", fontsize=11, fontweight="bold"
+    )
+    axes[idx].set_xlabel("Nivel de Riesgo Cardiovascular")
+    axes[idx].set_xticklabels(class_labels_short)
+    axes[idx].set_ylabel(col)
+
+plt.suptitle(
+    "Distribución de las 8 Variables Numéricas más Correlacionadas empíricamente",
+    y=1.02,
+    fontsize=14,
+    fontweight="bold",
+)
+plt.tight_layout()
+plt.show()
+\end{lstlisting}
+No es un poco innecesario este codigo por volver a calcular las correlacion de spearman si ya tienes la matriz de correlación de antes? o es mejor porque es más preciso?
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Tienes toda la razón: es completamente innecesario y redundante. No es más
+preciso en absoluto; el cálculo matemático y el resultado numérico son
+exactamente los mismos.
+
+¿Por qué es redundante?
+
+En el paso 1 ya calculaste la matriz completa:
+
+corr_matrix = df[NUM_COLS + [TARGET_COL]].corr(method="spearman")
+
+Dentro de corr_matrix, la columna (o fila) correspondiente a TARGET_COL ya
+contiene exactamente la correlación de Spearman de cada variable numérica con el
+target.
+
+Volver a ejecutar df[NUM_COLS].corrwith(...) en el paso 2 obliga a pandas a
+volver a ordenar (rankear) todos los datos y recalcular las operaciones
+matemáticas desde cero, lo cual:
+
+1.  Desperdicia tiempo de cómputo (Spearman requiere ordenar los datos, lo que
+    en datasets medianos/grandes es costoso).
+2.  Viola el principio DRY (Don't Repeat Yourself).
+
+Cómo simplificarlo
+
+Puedes reemplazar esa línea extrayendo directamente la serie de la matriz que ya
+calculaste:
+
+# ------------------------------------------------------------------------------
+# 2. TOP VARIABLES NUMÉRICAS CON MAYOR PODER DISCRIMINATORIO EMPÍRICO
+# ------------------------------------------------------------------------------
+# En lugar de recalcular con .corrwith():
+# corr_with_target = df[NUM_COLS].corrwith(df[TARGET_COL], method="spearman")
+
+# Simplemente extraes la columna del target para las variables numéricas:
+corr_with_target = corr_matrix.loc[NUM_COLS, TARGET_COL]
+
+top_features = corr_with_target.abs().sort_values(ascending=False).head(8).index
+
+El resto de tu código funcionará exactamente igual, pero de forma más limpia,
+idiomática y eficiente.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Al notar que la correlación se calculaba dos veces y dudar de si aportaba mayor precisión, se confirmó con esta consulta que el segundo cálculo era redundante e innecesario, pasando a extraer los valores directamente de la matriz previa para simplificar el código.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+\begin{lstlisting}[language=Python]
+for idx, col in enumerate(top_features):
+    r_val = corr_with_target[col]
+    sns.boxplot(
+        x=TARGET_COL,
+        y=col,
+        data=df,
+        ax=axes[idx],
+        palette= "Blues",
+        hue=TARGET_COL,
+        legend=False,
+    )
+\end{lstlisting}
+Haz que la paleta sea roja si la correlación es positiva y azul si es negativa.
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aquí tienes el bucle modificado. Puedes asignar dinámicamente la paleta ("Reds" si es positiva o "Blues" si es negativa) evaluando el valor de r_val:
+for idx, col in enumerate(top_features):
+    r_val = corr_with_target[col]
+
+    # Paleta dinámica: Rojo si aumenta el riesgo (+), Azul si es protector (-)
+    palette_color = "Reds" if r_val > 0 else "Blues"
+
+    sns.boxplot(
+        x=TARGET_COL,
+        y=col,
+        data=df,
+        ax=axes[idx],
+        palette=palette_color,
+        hue=TARGET_COL,
+        legend=False,
+    )
+    axes[idx].set_title(
+        f"{col}\n(Spearman r = {r_val:+.2f})", fontsize=11, fontweight="bold"
+    )
+    axes[idx].set_xlabel("Nivel de Riesgo Cardiovascular")
+    axes[idx].set_xticklabels(class_labels_short)
+    axes[idx].set_ylabel(col)
+¿Qué hace este cambio?
+
+  - Si r > 0 (Factor de Riesgo): utiliza la gama "Reds", donde los niveles de
+    riesgo van subiendo en tonos de rojo.
+  - Si r \le 0 (Factor Protector): utiliza la gama "Blues", manteniendo la
+    escala de azules.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se acepta la sugerencia, pero sin hacer la variable auxiliar.
+\end{iaanalisis}
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Tengo una base de datos sobre Predicción Multiclase de Riesgo Cardiovascular en
+Población Adulta para clasificar a los pacientes en tres niveles de riesgo
+cardiovascular (Clase 0: Bajo Riesgo, Clase 1: Riesgo Moderado y Clase 2: Alto
+Riesgo). Las variables son:
+
+edad (Numérico): Edad del paciente expresada en años cumplidos.
+
+presion_sistolica (Numérico): Presión arterial sistólica medida en reposo
+(mmHg).
+
+presion_diastolica (Numérico): Presión arterial diastólica medida en reposo
+(mmHg).
+
+colesterol_total (Numérico): Nivel de colesterol total en suero (mg/dL).
+
+colesterol_hdl (Numérico): Nivel de colesterol de alta densidad o 'colesterol
+bueno' (mg/dL).
+
+colesterol_ldl (Numérico): Nivel de colesterol de baja densidad o 'colesterol
+malo' (mg/dL).
+
+trigliceridos (Numérico): Concentración sérica de triglicéridos (mg/dL).
+
+glucosa_ayunas (Numérico): Nivel de glucosa en sangre tras ayuno nocturno
+(mg/dL).
+
+indice_masa_corporal (Numérico): Índice de masa corporal calculado como
+peso/talla² (kg/m²).
+
+frecuencia_cardiaca_reposo (Numérico): Frecuencia cardíaca medida en reposo
+(latidos por minuto).
+
+horas_sueno_diarias (Numérico): Promedio de horas de descanso nocturno
+declaradas por día.
+
+consumo_alcohol_semanal (Numérico): Unidades de bebida estándar de alcohol
+consumidas semanalmente.
+
+anos_fumador (Numérico): Tiempo acumulado de exposición al tabaco expresado en
+años.
+
+proteina_c_reactiva (Numérico): Concentración de proteína C reactiva
+ultrasensible (mg/L).
+
+acido_urico (Numérico): Nivel sérico de ácido úrico (mg/dL).
+
+clearance_creatinina (Numérico): Tasa de filtrado glomerular / depuración de
+creatinina (mL/min).
+
+frecuencia_ejercicio_semanal (Numérico): Días a la semana con actividad física
+moderada o intensa.
+
+perimetro_cintura (Numérico): Circunferencia abdominal medida en centímetros.
+
+hemoglobina_glicosilada (Numérico): Porcentaje de hemoglobina glicosilada HbA1c
+en sangre (%).
+
+fumador_actual (Booleano): Indica el hábito tabáquico activo (1: Sí, 0: No).
+
+hipertension_previa (Booleano): Diagnóstico previo confirmado de hipertensión
+arterial (1: Sí, 0: No).
+
+diabetes_mellitus (Booleano): Diagnóstico previo de diabetes mellitus tipo 2 (1:
+Sí, 0: No).
+
+tratamiento_estatinas (Booleano): Uso habitual de fármacos hipolipemiantes /
+estatinas (1: Sí, 0: No).
+
+uso_antihipertensivos (Booleano): Uso habitual de medicamentos para el control
+presivo (1: Sí, 0: No).
+
+tipo_alimentacion (Nominal): Patrón dietético principal del paciente. Valores
+posibles: 'Mediterránea', 'Occidental', 'Vegetariana', 'Baja en carbohidratos'.
+
+nivel_actividad (Nominal): Grado habitual de actividad física diaria. Valores
+posibles: 'Sedentario', 'Ligeramente activo', 'Moderadamente activo', 'Muy
+activo'.
+
+antecedentes_familiares_tipo (Nominal): Presencia de eventos cardiovasculares en
+familiares de primer grado. Valores posibles: 'Ninguno', 'Materno', 'Paterno',
+'Ambos'.
+
+riesgo_cardiovascular (Objetivo): Variable target de clasificación en 3
+categorías (0: Bajo riesgo, 1: Riesgo moderado, 2: Alto riesgo).
+
+Quiero que me digas valores en los que suelen estar estas variables y qué
+errores sería conveniente revisar.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+
+Para preparar adecuadamente esta base de datos antes de entrenar un modelo de
+Machine Learning, es fundamental validar tanto los rangos clínicos plausibles
+como la coherencia lógica entre variables.
+
+A continuación, tienes una guía detallada dividida en dos partes: rangos de
+referencia y errores/inconsistencias clave a revisar.
+
+1. Rangos de Valores Típicos y Plausibles
+
+A continuación se presentan los valores divididos en rangos normales, rangos
+habituales en la práctica clínica y límites extremos que indicarían un posible
+error de captura:
+
+| Variable                           | Rango Normal / Óptimo               | Rango Típico en Adultos | Alerta: Posible Error de Datos                                        |
+| :--------------------------------- | :---------------------------------- | :---------------------- | :-------------------------------------------------------------------- |
+| **edad**                           | 18 – 65 años                        | 18 – 95 años            | $< 18$ (si es solo adultos) o $> 110$                                 |
+| **presion\_sistolica**             | 90 – 120 mmHg                       | 100 – 180 mmHg          | $< 70$ (shock) o $> 240$ mmHg                                         |
+| **presion\_diastolica**            | 60 – 80 mmHg                        | 60 – 110 mmHg           | $< 40$ o $> 140$ mmHg                                                 |
+| **colesterol\_total**              | $< 200$ mg/dL                       | 130 – 320 mg/dL         | $< 80$ o $> 500$ mg/dL                                                |
+| **colesterol\_hdl**                | $> 40$ (hombres) / $> 50$ (mujeres) | 25 – 85 mg/dL           | $< 15$ o $> 120$ mg/dL                                                |
+| **colesterol\_ldl**                | $< 100$ mg/dL                       | 70 – 220 mg/dL          | $< 30$ o $> 350$ mg/dL                                                |
+| **trigliceridos**                  | $< 150$ mg/dL                       | 60 – 350 mg/dL          | $< 30$ o $> 1000$ mg/dL                                               |
+| **glucosa\_ayunas**                | 70 – 99 mg/dL                       | 70 – 250 mg/dL          | $< 40$ (hipoglucemia severa) o $> 400$ mg/dL                          |
+| **indice\_masa\_corporal**         | 18.5 – 24.9 kg/m²                   | 18 – 45 kg/m²           | $< 13$ o $> 65$ kg/m²                                                 |
+| **frecuencia\_cardiaca\_reposo**   | 60 – 100 lpm                        | 50 – 110 lpm            | $< 35$ o $> 180$ lpm                                                  |
+| **horas\_sueno\_diarias**          | 7 – 9 horas                         | 4 – 10 horas            | $< 2$ o $> 16$ horas                                                  |
+| **consumo\_alcohol\_semanal**      | 0 – 7 (mujeres) / 0 – 14 (hombres)  | 0 – 30 UBEs\*           | $< 0$ o $> 80$ UBEs semanales                                         |
+| **anos\_fumador**                  | 0 años                              | 0 – 50 años             | $< 0$ o mayor que `edad - 10`                                         |
+| **proteina\_c\_reactiva (PCR)**    | $< 1.0$ mg/L (bajo riesgo)          | 0.1 – 10 mg/L           | $> 20$ mg/L (suele indicar infección aguda, no riesgo vascular basal) |
+| **acido\_urico**                   | 3.5 – 7.2 mg/dL                     | 2.5 – 10 mg/dL          | $< 1.5$ o $> 15$ mg/dL                                                |
+| **clearance\_creatinina**          | 90 – 130 mL/min                     | 30 – 140 mL/min         | $< 5$ o $> 200$ mL/min                                                |
+| **frecuencia\_ejercicio\_semanal** | 3 – 5 días                          | 0 – 7 días              | $< 0$ o $> 7$ días                                                    |
+| **perimetro\_cintura**             | $< 80$ (mujeres) / $< 94$ (hombres) | 65 – 130 cm             | $< 45$ o $> 180$ cm                                                   |
+| **hemoglobina\_glicosilada**       | 4.0% – 5.6%                         | 4.5% – 11%              | $< 3.5\%$ o $> 16\%$                                                  |
+
+*UBE = Unidad de Bebida Estándar (aprox. 1 caña de cerveza, 1 copa de vino o 1
+chupito).
+
+2. Errores de Coherencia Cruzada (Cruciales para Limpieza)
+
+En variables médicas, los datos pueden estar individualmente en rango, pero ser
+fisiológicamente imposibles o contradictorios al compararlos entre sí:
+
+A. Presión Arterial
+
+  - Error crítico: presion_diastolica >= presion_sistolica. La sistólica siempre
+    debe ser superior.
+  - Presión de pulso no plausible: La diferencia (presion_sistolica -
+    presion_diastolica) rara vez es menor a 20 mmHg o mayor a 100 mmHg en
+    reposo.
+
+B. Coherencia en el Perfil Lipídico
+
+  - Ecuación de Friedewald: En condiciones normales, el colesterol total se
+    aproxima con:
+    \text{Colesterol Total} \approx \text{LDL} + \text{HDL} + (\text{Triglicéridos} / 5)
+    Si la suma de \text{LDL} + \text{HDL} supera ampliamente al
+    colesterol_total, hay un error de registro.
+
+C. Tabaco y Edad
+
+  - anos_fumador >= edad: Imposible.
+  - anos_fumador > (edad - 10): Muy poco probable (indicaría que empezó a fumar
+    con menos de 10 años).
+  - Contradicción de hábito: Pacientes con fumador_actual == 0 pero anos_fumador
+    > 0 representan ex-fumadores (esto es correcto, pero conviene definirlo);
+    sin embargo, fumador_actual == 1 con anos_fumador == 0 suele ser un error (a
+    menos que haya empezado hace menos de un año).
+
+D. Diabetes y Glucemia
+
+  - Si diabetes_mellitus == 0, pero hemoglobina_glicosilada >= 6.5% y
+    glucosa_ayunas >= 126 mg/dL, es probable que el paciente sea un diabético no
+    diagnosticado o haya un error en la etiqueta binaria.
+  - Si diabetes_mellitus == 1, pero tiene glucosa_ayunas y
+    hemoglobina_glicosilada en rangos extremadamente bajos sin medicación,
+    convendría revisarlo.
+
+E. Hipertensión y Medicación
+
+  - Pacientes con uso_antihipertensivos == 1 que tienen hipertension_previa == 0
+    (raro, salvo uso off-label para otras patologías como migraña o
+    insuficiencia cardíaca).
+
+F. Actividad Física
+
+  - Inconsistencia entre nivel_actividad == 'Sedentario' y
+    frecuencia_ejercicio_semanal >= 5.
+  - Inconsistencia entre nivel_actividad == 'Muy activo' y
+    frecuencia_ejercicio_semanal == 0.
+
+G. Antropometría (IMC vs. Cintura)
+
+  - Un indice_masa_corporal > 35 (obesidad moderada/severa) acompañado de un
+    perimetro_cintura < 70 cm indica casi con seguridad un error en las unidades
+    (por ejemplo, registrar la cintura en pulgadas en lugar de centímetros).
+
+3. Buenas Prácticas adicionales para tu Modelo
+
+1.  Codificación de Variables Nominales:
+      - antecedentes_familiares_tipo y tipo_alimentacion deben tratarse con
+        One-Hot Encoding.
+      - nivel_actividad tiene un orden intrínseco (Sedentario \to Ligeramente
+        \to Moderadamente \to Muy activo), por lo que un Ordinal Encoding
+        (0, 1, 2, 3) preservará mejor esa jerarquía.
+2.  Distribución del Target (riesgo_cardiovascular):
+      - Comprueba el desbalance de clases. En salud, la Clase 2 (Alto Riesgo)
+        suele tener muchas menos muestras que la Clase 0. Si hay desbalance
+        severo, evalúa métricas como Macro F1-Score o PR-AUC multiclase en lugar
+        de Accuracy, y utiliza técnicas como SMOTE o ponderación de clases
+        (class_weight='balanced').
+3.  Valores Nulos Encubiertos:
+      - Busca números como -1, 999 o 0 en variables como clearance_creatinina,
+        horas_sueno_diarias o presion_sistolica, que a veces se introducen en
+        bases de datos hospitalarias para indicar "no registrado".
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+En cuanto a esta propuesta inicial de la IA para detectar problemáticas y establecer algunos rangos para detectar valores erróneos o atípicos, hay opinión dividida. Por una parte, se aceptan y se toman en cuenta algunas propuestas sobre valores y rangos a comprobar. Algunos ya los habíamos tenido en cuenta, como puede ser comprobar si hay menores de edad en los ejemplos o comprobar que el consumo de alcohol semanal no es negativo, pero algunos otros son propuestas interesantes que no se habían tenido en cuenta, aunque falta comprobar si comprobación tienen sentido. También revela una fórmula por la cual se relacionan los dos tipos de colesterol y el colesterol total, revelando que también la columna $trigliceridos$ actúa. Sin embargo, se descartan algunas propuestas como marcar ciertos valores extremos como errores, ya que eliminar valores atípicos pueden ser valores valiosos para poder aprender a detectar el riesgo alto, y más si es un problema en el ámbito de la medicina. Habrá que determinar qué valores atípicos conservar.
+\end{iaanalisis}
+
+
+\begin{iaprompt}
+Muchas de las variables que me has indicado como una alerta de posible error,si
+estoy haciendo un modelo para predecir el riesgo cardiovascular, no crees que
+son interesantes mantenerlas porque esos atípicos podrían ayudar a ser el
+detonante para detectar el riesgo?
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+
+Es una observación completamente acertada y muy perspicaz desde el punto de
+vista clínico. En medicina, los eventos graves (infartos, ictus) suelen ocurrir
+precisamente en la "cola" de la distribución: el paciente que tiene 210 mmHg de
+tensión sistólica o 9.5% de hemoglobina glicosilada es exactamente el que debe
+clasificarse como Alto Riesgo (Clase 2).
+
+Eliminar estos valores a ciegas ("tratar los outliers" de forma estándar)
+arruinaría la capacidad predictiva del modelo.
+
+Sin embargo, hay una diferencia crítica entre dos tipos de valores extremos. El
+objetivo no es borrar datos por ser altos, sino distinguir el riesgo extremo del
+"ruido biológicamente imposible" o del "ruido de confusión".
+
+Aquí tienes cómo diferenciar lo que debes conservar de lo que debes corregir o
+descartar:
+
+1. Lo que DEBES mantener (Atípicos Clínicos / Señales de Alto Riesgo)
+
+Son valores muy elevados, pero compatibles con la vida y directamente causantes
+de daño cardiovascular. No los elimines ni los recortes (capping/winsorizing) si
+vas a usar modelos basados en árboles:
+
+  - Presión sistólica de 190 – 220 mmHg: Es una crisis o urgencia hipertensiva.
+    Es un predictor brutal de riesgo cardiovascular inminente.
+  - Triglicéridos de 500 – 1000 mg/dL: Se asocia a hipertrigliceridemia severa
+    (y riesgo de pancreatitis además de cardiovascular).
+  - Glucosa en ayunas de 250 – 350 mg/dL o HbA1c de 11 – 13%: Diabetes
+    gravemente descompensada; genera aterosclerosis acelerada.
+  - Clearance de creatinina de 15 – 30 mL/min: Insuficiencia renal avanzada; la
+    enfermedad renal crónica es uno de los mayores multiplicadores de riesgo
+    cardiovascular conocidos.
+  - IMC de 45 – 55: Obesidad mórbida grado III, factor de riesgo masivo.
+
+2. Lo que DEBES corregir o eliminar (Errores que engañan al algoritmo)
+
+Aquí el valor atípico no representa "más riesgo", sino un fallo en la toma o
+registro del dato. Si dejas estos valores, el modelo aprenderá patrones
+absurdos:
+
+  - Incompatibilidad física o biológica:
+      - Una presion_sistolica de 320 mmHg o 30 mmHg en un paciente ambulatorio.
+        A 320 revienta una arteria cerebral al instante; a 30 la persona está en
+        parada cardiorrespiratoria, no haciéndose un chequeo de prevención.
+      - presion_diastolica (p. ej., 110) mayor que la sistolica (p. ej., 90):
+        Error humano al teclear la barra espaciadora o intercambiar las
+        columnas.
+  - Confusión de escalas/unidades (Muy común):
+      - glucosa_ayunas con valor 6.5: El médico anotó el dato en mmol/L (usado
+        en Europa/EE.UU.) en lugar de mg/dL (debería ser ~117 mg/dL). El modelo
+        interpretará que el paciente tiene glucosa 6.5 mg/dL (estaría muerto de
+        hipoglucemia).
+      - perimetro_cintura de 36: Medido en pulgadas, no en centímetros (36
+        pulgadas son ~91 cm).
+  - Datos "centinela" o nulos camuflados:
+      - clearance_creatinina = -1 o 999. Si el algoritmo lo toma como número
+        continuo, un 999 parecerá un riñón superhumano cuando en realidad era un
+        dato faltante.
+
+3. El caso especial de la PCR (Proteína C Reactiva): El "Ruido de Confusión"
+
+La proteina_c_reactiva es el mejor ejemplo de por qué hay que tener cuidado:
+
+  - En riesgo cardiovascular se utiliza la PCR ultrasensible (PCR-us):
+      - Bajo riesgo: < 1 mg/L
+      - Riesgo moderado: 1 - 3 mg/L
+      - Riesgo alto: > 3 mg/L (hasta unos 10 mg/L)
+  - ¿Qué pasa si un paciente tiene PCR de 80 mg/L? No significa que tenga 8
+    veces más riesgo cardíaco que uno de 10. Significa que ese día tenía una
+    neumonía, una infección bacteriana o una apendicitis. Si dejas ese valor sin
+    contexto, el modelo puede asumir que una inflamación sistémica aguda es la
+    causa primaria de riesgo cardiovascular a largo plazo, distorsionando el
+    peso de la variable. Clínicamente, ante una PCR > 20 mg/L, la analítica
+    cardiovascular suele descartarse y repetirse semanas después.
+
+¿Cómo manejar esto con Machine Learning?
+
+1.  Usa modelos robustos a valores extremos: Si mantienes estos valores atípicos
+    reales (como 210 mmHg de tensión o glucosas de 300), no utilices Regresión
+    Logística o Redes Neuronales sin escalar, ya que los extremos desestabilizan
+    los gradientes y coeficientes. Utiliza modelos basados en árboles de
+    decisión (XGBoost, LightGBM, Random Forest), ya que a estos modelos solo les
+    importa el orden de partición (>180 ya es alto, da igual si es 185 o 240,
+    caerán en la misma rama).
+2.  Tu filtro no debe ser estadístico (Z\text{-score} > 3), debe ser de
+    plausibilidad fisiológica: No quites un dato solo porque se aleje de la
+    campana de Gauss. Quítalo únicamente si el valor es incompatible con que el
+    paciente haya llegado caminando a la consulta.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+    TODO (Aún no he podido verificar si los valores que dice para todas las variables son correctos y si de las variables científicas hay valores que no se pueden dar en el mundo real)
+\end{iaanalisis}
+
+
+
+\begin{iaprompt}
+colesterol hdl valores puede ser negativo?
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash-Lite 3.5 en Gemini}
+No, el valor del colesterol HDL (conocido como colesterol "bueno") no puede ser negativo.
+
+• Valores mínimos lógicos: Los niveles de colesterol HDL en la sangre se miden en miligramos por decilitro (mg/dL) y el límite físico inferior es de 0 mg/dL, ya que no existe una cantidad menor de cero.
+
+• Valores considerados bajos:
+
+	• En hombres: menos de 40 mg/dL (y se considera muy bajo por debajo de 35 mg/dL).
+    
+	• En mujeres: menos de 50 mg/dL (y se considera muy bajo por debajo de 40 mg/dL).
+    
+• Si has visto un número negativo o extraño en una analítica: Generalmente se debe a un error de transcripción, un fallo en la lectura del equipo del laboratorio, un formato de celda alterado o un código de error informático, y no a que tu organismo tenga un nivel negativo de lipoproteínas.
+
+Consulta con tu médico o con el laboratorio que realizó el análisis para que repitan la lectura o te aclaren la cifra exacta de tu perfil lipídico.
+Si te han entregado unos análisis recientes, dime:
+
+• ¿Qué valor numérico exacto te aparece?
+
+• ¿Hay otros valores alterados (como los triglicéridos o el colesterol LDL)?
+
+Así podré orientarte mejor sobre lo que significa tu resultado.
+\end{iaresp}
+\begin{iaanalisis}
+Al encontrarse este valor negativo y dudar de su validez, se aceptó la afirmación de que el colesterol HDL no puede ser biológicamente negativo, estableciendo correctamente el límite inferior en 0 mg/dL.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+y los triglicéridos pueden ser negativos?
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash-Lite 3.5 en Gemini}
+No, los triglicéridos no pueden ser negativos. En una analítica de sangre, los resultados miden la cantidad de una sustancia real presente en el organismo, por lo que el valor mínimo posible es cero (0 mg/dL), aunque un nivel de cero absoluto tampoco es biológicamente realista.
+Si ves un signo de resta o un valor negativo en tu informe, generalmente se debe a una de las siguientes razones:
+
+• Es un guion o símbolo de separación: A veces, el sistema del laboratorio utiliza un guion antes del número o para separar el nombre de la prueba de su resultado (por ejemplo: Triglicéridos - 85 mg/dL), lo que puede confundirse con un signo "menos".
+
+• Un error en el informe impreso: Puede tratarse de una errata tipográfica o un fallo de formato en la visualización del documento.
+
+• Error de laboratorio: En casos extremadamente raros, si el cálculo se realiza de forma automatizada mediante ciertas fórmulas indirectas y otros valores están muy descompensados, el sistema podría arrojar un error técnico.
+
+Para ayudarte a salir de dudas, ¿podrías transcribir exactamente cómo aparece escrito el valor en tu papel, o indicarme el resto de los resultados (como el colesterol total, LDL y HDL)?
+\end{iaresp}
+\begin{iaanalisis}
+Al encontrarse este valor negativo y dudar de su validez, se aceptó la afirmación de que los triglicéridos no pueden ser biológicamente negativos, estableciendo correctamente el límite inferior en 0 mg/dL. La IA plantea que podría haberse colado un signo menos. Esta hipótesis se podría tener en cuenta a la hora de decidir qué estrategia aplicr con las variables cuyos valores no podían ser negativos, si se determina que realmente ha sido un error al escribir los datos.
+\end{iaanalisis}
+
+
+
+
+
+
+
+
+
+
+
 \end{document}
+
+
 
