@@ -193,7 +193,87 @@ TODO
 
 
 
+\begin{iaprompt}
+en visual studio code (.ipynb) cuando muestro, por ejemplo, un dataframe, se
+cortan las columnas o las filas a mitad y lo mismo ocurre con los print largos.
+Cómo puedo ver la salida completa?
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Este problema ocurre por dos razones: las limitaciones propias de Pandas (para
+no colapsar la memoria) y las limitaciones de la interfaz de VS Code (para no
+ralentizar el editor).
 
+Aquí tienes las soluciones para ambos casos:
+
+1. Para DataFrames de Pandas (Filas y Columnas cortadas)
+
+Pandas viene configurado por defecto para truncar tablas grandes. Puedes cambiar
+esta configuración ejecutando esto en una celda al principio de tu notebook:
+
+import pandas as pd
+
+# Mostrar todas las columnas
+pd.set_option('display.max_columns', None)
+
+# Mostrar todas las filas (¡Cuidado si tienes millones de filas!)
+pd.set_option('display.max_rows', None)
+
+# Mostrar el contenido completo de cada celda (que no corte el texto largo)
+pd.set_option('display.max_colwidth', None)
+
+Consejo Pro para VS Code:
+VS Code tiene un visor de datos integrado excelente.
+
+1.  Haz clic en el botón "Variables" en la barra superior del notebook (al lado
+    de "Clear All Outputs").
+2.  Busca tu DataFrame y haz clic en el icono pequeño que parece una tabla a la
+    izquierda del nombre de la variable.
+    Se abrirá una pestaña interactiva donde puedes ordenar, filtrar y ver todos
+    los datos sin recortar.
+
+2. Para salidas de texto largas (print())
+
+Si haces un print() muy largo, VS Code a veces corta el texto o le pone una
+barra de desplazamiento molesta.
+
+Opción A: Desactivar el scroll (Hacer que se vea todo hacia abajo)
+
+1.  Pasa el cursor por el margen izquierdo de la celda de salida (al lado de
+    donde aparece el texto).
+2.  Haz clic en los tres puntos (...) que aparecen o haz clic derecho sobre la
+    salida.
+3.  Selecciona "Toggle Output Scrolling" (Alternar desplazamiento de salida).
+    Esto expandirá la celda para que muestre todo el texto en lugar de
+    recortarlo en una ventanita pequeña.
+
+Opción B: Cambiar el límite de líneas en la configuración de VS Code
+
+Por seguridad, VS Code limita el texto plano a unas 100 líneas por celda para no
+trabarse. Puedes aumentarlo:
+
+1.  Ve a Configuración: Ctrl + , (en Windows/Linux) o Cmd + , (en Mac).
+2.  En la barra de búsqueda escribe: notebook text line limit.
+3.  Busca la opción: Notebook > Output: Text Line Limit.
+4.  Aumenta el número (por defecto suele ser 100, puedes poner 500, 1000 o más).
+
+3. Solución rápida en código para un print puntual
+
+Si solo quieres imprimir un texto muy largo o un DataFrame como texto completo
+una sola vez sin cambiar la configuración global:
+
+# Para DataFrames:
+print(df.to_string())
+
+# Para textos gigantes (evitar que la UI se congele guardándolo en un archivo temporal):
+with open("salida.txt", "w", encoding="utf-8") as f:
+    f.write(str(tu_variable_gigante))
+# Y luego lo abres directamente en VS Code con Ctrl+O
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se acepta el código para poder visualizar los dataframes que pandas corta por defecto, dejándolo como código para descomentar si se necesita.
+\end{iaanalisis}
 
 \end{document}
 
