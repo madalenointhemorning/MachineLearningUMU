@@ -1931,6 +1931,247 @@ Se cambia la interpretación del valor del skewness que había antes por una int
 
 
 
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+frecuencia_ejercicio_semanal (Numérico): Días a la semana con actividad física moderada o intensa.
+
+nivel_actividad (Nominal): Grado habitual de actividad física diaria. Valores posibles: 'Sedentario', 'Ligeramente activo', 'Moderadamente activo', 'Muy activo'.
+
+Tengo estas dos variables en mi dataset. ¿Crees que ambas variables se refieren a lo mismo o se podrían estar refiriendo a actividades diferentes, como la actividad física en el día a día, por ejemplo, trabajando, frente a ejercicio y deporte?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+¡Tienes toda la razón en tu intuición! Aunque ambas variables están relacionadas con el movimiento y el esfuerzo físico, **se refieren a dimensiones diferentes** y complementarias de la actividad física.
+
+No son redundantes; de hecho, en estudios epidemiológicos, de salud o de ciencia de datos, es muy común encontrar ambas por separado porque capturan realidades distintas del estilo de vida de una persona.
+
+---
+
+### Diferencia clave entre ambas variables
+
+* **`frecuencia_ejercicio_semanal` (Ejercicio estructurado):**
+Mide la **intencionalidad y el tiempo de ocio dedicado al deporte o entrenamiento**. Cuenta los días en que la persona realiza una actividad física planificada (como ir al gimnasio, salir a correr, nadar, jugar al fútbol o asistir a clases dirigidas).
+* **`nivel_actividad` (Actividad global / Estilo de vida):**
+Mide el **gasto energético total derivado de la rutina diaria** (a menudo asociado al concepto de *PAL - Physical Activity Level* o al NEAT). Esto incluye no solo el ejercicio, sino también el tipo de trabajo (si es de oficina sentado o de pie cargando peso), las tareas domésticas, los desplazamientos a pie o en bicicleta y el movimiento espontáneo a lo largo del día.
+
+---
+
+### Ejemplos prácticos para entenderlo
+
+Para ver por qué son distintas, imagina estos dos perfiles típicos en un dataset:
+
+* **Perfil 1 (Oficinista deportista):** Trabaja sentado frente a un ordenador 8 horas al día, pero es muy disciplinado y va al gimnasio o sale a correr **4 días a la semana**.
+* *`frecuencia_ejercicio_semanal`* = `4`
+* *`nivel_actividad`* = Podría ser *"Ligeramente activo"* o *"Moderadamente activo"* (el resto del día es sedentario).
+
+
+* **Perfil 2 (Trabajador de la construcción o repartidor):** Trabaja todo el día de pie, caminando y cargando peso de forma activa, pero nunca va al gimnasio ni hace deporte en su tiempo libre (**0 días de ejercicio planificado**).
+* *`frecuencia_ejercicio_semanal`* = `0`
+* *`nivel_actividad`* = Podría ser *"Muy activo"* debido al esfuerzo físico constante de su jornada laboral.
+
+
+
+---
+
+### ¿Por qué es útil tener ambas en un dataset?
+
+Tener las dos variables permite a los modelos (o a los analistas) distinguir entre el **ejercicio recreativo/saludable** y la **carga física ocupacional o de estilo de vida**, los cuales tienen impactos diferentes en la salud, el metabolismo y el gasto calórico total.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+En relación con saber si las variables frecuencia\_ejercicio\_semanal y nivel\_actividad se refieren a lo mismo o a cosas diferentes, la IA distinguió ambas dimensiones (ejercicio estructurado y planificado frente a gasto energético global o actividad ocupacional/diaria) y aportó ejemplos claros para justificarlo. Aunque es una respuesta en principio a tomar en cuenta, se debe discutir este asunto con el equipo para adoptar una solución de interpretación definitiva. Esta consulta únicamente sirve para tener una primera opinión al respecto.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+y qué ocurre con los sedentarios que hacen 7 días? Según la descripción de las variables, se deberían considerar valores incoherentes o son actividades físicas diferentes?
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+¡Qué excelente observación! Has dado en el clavo con un dilema clásico de **calidad de datos (*Data Quality*)** y validación lógica en ciencia de datos y salud.
+
+En la práctica, encontrarte con un perfil que indica `nivel_actividad = 'Sedentario'` pero una `frecuencia_ejercicio_semanal = 7` (entrenar todos los días) abre dos escenarios muy claros:
+
+---
+
+### 1. Una incoherencia o error de datos (Lo más probable)
+
+En la gran mayoría de cuestionarios de salud estandarizados (como el IPAQ - *International Physical Activity Questionnaire*), el **nivel de actividad global** se calcula sumando el gasto energético total, donde el ejercicio estructurado aporta una cantidad masiva de puntos (METs).
+
+Si el dataset asigna la etiqueta *"Sedentario"* basándose en una puntuación global o en una escala donde el ejercicio cuenta, esta combinación es **metodológicamente imposible**. Suele deberse a:
+
+* **Errores de auto-reporte:** Las personas suelen sobreestimar su ejercicio ("voy al gimnasio 7 días" aunque sea 10 minutos a mirar el móvil) o malinterpretan las preguntas del formulario.
+* **Contradicciones en la fuente:** Inconsistencias lógicas introducidas al fusionar bases de datos o por errores humanos en la digitalización de encuestas.
+
+### 2. Una separación estricta de dominios (Caso muy atípico pero real)
+
+Si el cuestionario o dataset fue diseñado para aislar completamente el **trabajo/rutina diaria** del **tiempo libre**, teóricamente podría ocurrir.
+
+* *Imagina a un teletrabajador extremo:* Pasa 12 horas al día sentado frente al ordenador programando o teletrabajando (lo que clasifica su día a día puramente laboral/cotidiano como *"Sedentario"*), pero por disciplina militar sale a correr o hace estiramientos intensos **todos los días del año** (7 días de ejercicio).
+* Fisiológicamente es posible, pero en términos de estilo de vida general, llamarlo "sedentario" resulta confuso porque alguien que entrena 7 días a la semana difícilmente encaja en el concepto clínico de sedentarismo.
+
+---
+
+### ¿Cómo deberías manejar esto si estás analizando el dataset?
+
+Si estás limpiando los datos para un análisis o un modelo de Machine Learning, esta combinación debe tratarse como una **alerta de anomalía**:
+
+1. **Haz una tabulación cruzada (*crosstab*):** Cruza ambas variables en una tabla para ver cuántos casos caen en esta combinación (por ejemplo, ¿cuántos "sedentarios" hay con 5, 6 o 7 días de ejercicio?). Si son muchos, hay un problema en la definición de las variables o en cómo se recolectó la información.
+2. **Criterio de limpieza (Imputación o Filtrado):** Dependiendo de tu objetivo, podrías reclasificar a estos perfiles como "Moderadamente activos" o "Muy activos" (dado que 7 días de ejercicio anulan el sedentarismo real), o bien marcarlos como valores atípicos (*outliers*) para eliminarlos si corrompen la lógica del modelo.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se le pregunta a la IA sobre un caso que genera cierta ambigüedad (ser sedentario con 7 días de actividad física moderada o intensa). Aunque la IA se inclina a considerarlo una incoherencia, no descarta que se deba a medir dominios separados. Ante la falta de una conclusión cerrada, se comentará con el equipo para decidir una solución.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+comprueba en un df['anos_fumador'] en python cuál es la cantidad de decimales más grande. Es un float
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Para comprobar cuál es la cantidad máxima de decimales en una columna de tipo float (df['anos_fumador']) en Pandas, puedes utilizar dos enfoques principales según tus necesidades:
+
+Opción 1: Método rápido (manipulación de strings)
+Este método es ideal si tus datos no contienen notación científica. Convierte los valores a texto, los divide por el punto decimal, elimina los ceros finales sobrantes y calcula la longitud máxima.
+
+Python
+import pandas as pd
+
+# Calcula el número máximo de decimales ignorando valores nulos (NaN)
+max_decimales = (
+    df['anos_fumador']
+    .dropna()
+    .astype(str)
+    .str.split('.')
+    .str[1]
+    .str.rstrip('0')
+    .str.len()
+    .max()
+)
+
+print(f"Cantidad máxima de decimales: {max_decimales}")
+Opción 2: Método robusto (con la librería decimal)
+Si tu DataFrame contiene números en notación científica (por ejemplo, 1.2e-5) o necesitas una precisión matemática absoluta al analizar los exponentes, la librería estándar decimal es la opción más segura:
+
+Python
+from decimal import Decimal
+import pandas as pd
+
+max_d = 0
+for val in df['anos_fumador'].dropna():
+    try:
+        d = Decimal(str(val))
+        exp = d.as_tuple().exponent
+        decimals = -exp if exp < 0 else 0
+        if decimals > max_d:
+            max_d = decimals
+    except Exception:
+        pass
+
+print(f"Cantidad máxima de decimales (con Decimal): {max_d}")
+Explicación rápida:
+dropna(): Evita errores si hay valores nulos (NaN) en la columna.
+
+rstrip('0') / Exponentes: Evitan que se cuenten como decimales reales los ceros innecesarios al final (por ejemplo, tratar 10.0 como 0 decimales en lugar de 1)
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+El programa es correcto y se acepta. Se elige la primera opción, que es más simple.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+D. Discordancia de comorbilidad vs fármaco:
+
+¿Toma antihipertensivos sin diagnóstico de hipertensión?
+
+farmaco_sin_diag_hta = ( (df["uso_antihipertensivos"] == 1) &
+(df["hipertension_previa"] == 0) ).sum() print( f"7. Uso de antihipertensivos
+sin diagnóstico previo de HTA: {farmaco_sin_diag_hta} casos" ) 7. Uso de
+antihipertensivos sin diagnóstico previo de HTA: 478 casos
+
+Qué mira esto? Son valores que están mal en mi dataset?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+No significa necesariamente que estén mal.
+
+Ese bloque de código está buscando pacientes que declaran tomar medicación para
+la tensión (uso_antihipertensivos == 1), pero en su historial figura que no
+tienen diagnóstico de hipertensión (hipertension_previa == 0).
+
+Que tengas 478 casos así se debe habitualmente a una de estas dos razones (una
+médica y otra de calidad de datos):
+
+1. La razón médica (Es un dato real y válido)
+
+Los fármacos antihipertensivos (como los IECA, ARA-II o betabloqueantes) no solo
+se recetan para la presión alta. Tienen muchas otras indicaciones médicas:
+
+  - Protección renal: A los pacientes con diabetes se les recetan
+    antihipertensivos (como enalapril o losartán) aunque tengan la tensión
+    perfecta, porque protegen los riñones.
+  - Insuficiencia cardíaca o arritmias: Se usan betabloqueantes (como
+    bisoprolol) para controlar el ritmo cardíaco, no por ser hipertensos.
+  - Profilaxis de migrañas o temblores: Fármacos como el propranolol se usan
+    para evitar dolores de cabeza crónicos.
+
+Si filtras esos 478 pacientes, probablemente verás que muchos tienen
+diabetes_mellitus == 1, problemas renales (clearance_creatinina bajo) o edad
+avanzada. En estos casos, el dato es 100% real.
+
+2. La razón de sesgo de encuesta / recogida de datos (Subdiagnóstico)
+
+Si la base de datos se hizo mediante un cuestionario al paciente:
+
+  - El paciente confunde su estado: Mucha gente piensa: "Como me tomo la
+    pastilla y mi tensión ahora da 120/80, ya no soy hipertenso", y marcan
+    hipertension_previa = 0.
+  - Falta de registro formal: El médico le mandó la pastilla de forma preventiva
+    pero en el sistema nunca se codificó formalmente la etiqueta de
+    "Hipertensión esencial".
+
+¿Qué debes hacer con esos 478 casos?
+
+1.  NO LOS BORRES NI LOS CAMBIES A CERO. Si borras 478 filas por esto, estarías
+    destruyendo información muy valiosa sobre pacientes medicados (que suelen
+    tener más riesgo).
+2.  Revisa su presión actual: Si tienen uso_antihipertensivos == 1,
+    hipertension_previa == 0, pero ves que su presion_sistolica media es de 145
+    mmHg o tienen diabetes, confirma la hipótesis de que están enfermos o mal
+    controlados.
+3.  Decisión para el modelo: El algoritmo de Machine Learning (como XGBoost o
+    Random Forest) es capaz de gestionar esto sin problema. Simplemente
+    aprenderá que el hecho de tomar el fármaco (uso_antihipertensivos == 1) es
+    una señal de riesgo por sí misma, independientemente de la casilla de
+    diagnóstico.
+
+En resumen: No es un error grave de tipo "persona con 300 años" o "presión
+diastólica mayor que sistólica". Es una inconsistencia clínica común en la
+práctica médica real y debes conservarla.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Al ver que se consideraba en el EDA 478 casos como incorrectos, se consultó a la IA para validarlo. La respuesta es coherente y determina que no es un error de datos. Al consultarlo con mi compañero, se decidió no aplicar ninguna modificación a estos registros.
+\end{iaanalisis}
+
+
+
+
+
+
 
 \end{document}
 
