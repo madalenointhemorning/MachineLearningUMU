@@ -24,7 +24,7 @@ El repositorio recoge el flujo de trabajo end-to-end: desde el análisis explora
 
 | Nombre y Apellidos | Usuario de GitHub | Correo Institucional |
 | :--- | :--- | :--- |
-| *Álvaro Arcís Reverte* | `@devuelvanlapeseta` | `usuario1@um.es` |
+| *Álvaro Arcís Reverte* | `@devuelvanlapeseta` | `alvaro.arcisr@um.es` |
 | *Alejandro Nicolás Navarro* | `@madalenointhemorning` | `a.nicolasnavarro@um.es` |
 
 ---
