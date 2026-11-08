@@ -2507,6 +2507,397 @@ Lejos de pensar que estos valores son al azar, la IA me demuestra que los límit
 \end{iaanalisis}
 
 
+Alejandro:
+
+% ==============================================================================
+% BLOQUE PREPROCESAMIENTO: P0 Y P1 (LIMPIEZA CLÍNICA Y JUSTIFICACIONES DEL NOTEBOOK)
+% ==============================================================================
+
+\begin{iaprompt}
+en el notebook de preprocesamiento vamos a estructurar el trabajo comparando una referencia y preprocesados incrementales donde cada uno añade una sola técnica para poder aislar qué mejora cada cosa. hemos definido p0 como referencia basica con dummies y mediana sin contar como tecnica, p1 que es la limpieza clinica con standardscaler, y dejamos p2 y p3 por decidir. redactame la introduccion del notebook y la tabla de resumen explicando que p0 no cuenta como tecnica para cumplir lo del apartado 3.1 del enunciado
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aquí tienes la redacción del planteamiento inicial para el encabezado del notebook:
+
+# Preprocesamiento
+Apartado del enunciado: 3.1, mínimo tres técnicas de preprocesamiento, indicando qué problemática resuelve cada una.
+
+Este cuaderno define y justifica los preprocesados que se compararán después con todos los modelos. Todo el código está en las celdas.
+
+## Planteamiento
+Se definen una referencia y preprocesados incrementales. Cada uno añade una sola técnica al anterior. Así, la diferencia de métricas entre dos preprocesados consecutivos se puede atribuir a la técnica añadida, y no a una mezcla de cambios.
+
+| ID | Técnica que añade | Problemática del EDA que resuelve |
+| :--- | :--- | :--- |
+| P0 | Referencia: dummies y mediana (no cuenta como técnica) | Ninguna. Es la base de comparación |
+| P1 | Técnica 1: limpieza clínica + StandardScaler | Valores imposibles, menores, colesterol_total incoherente, ejercicio no entero, nulos, escalas distintas |
+| P2 | Técnica 2: por decidir | Ver "Problemáticas pendientes" al final |
+| P3 | Técnica 3: por decidir | Ver "Problemáticas pendientes" al final |
+
+Esta disposición garantiza que P0 actúe como control metodológico estricto, permitiendo auditar el impacto marginal neto de cada decisión de ingeniería de datos.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se acepta el esquema planteado. Acordamos en el equipo comparar los preprocesados de forma estrictamente incremental (P0 -> P1 -> P2 -> P3) para no mezclar técnicas a la vez y poder justificar en la memoria qué problemática resuelve cada una sin ambigüedades.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+en la reunion acordamos hacer una particion train test 80/20 estratificada con semilla 123. el test lo queremos reservar para la evaluacion final y todo lo demas se elegira con validacion cruzada sobre el train. ademas el test tiene que tener solo adultos porque es lo que pide el enunciado. dame el codigo en python que haga la particion, filtre los menores del test y compruebe que no queda ningun menor en test y que las proporciones del target en train y test son iguales
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aquí tienes el bloque de código para realizar la partición preservando las proporciones del target y asegurando la integridad del test:
+
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+
+pd.set_option("display.max_colwidth", None, "display.width", 200)
+
+SEED = 123
+DATA_PATH = "../data/raw/enfermedad_cardiovascular.csv"
+TARGET = "riesgo_cardiovascular"
+EDAD_MINIMA = 18
+
+df = pd.read_csv(DATA_PATH)
+X, y = df.drop(columns=TARGET), df[TARGET]
+
+# Partición 80/20 estratificada por el target
+X_tr, X_te, y_tr, y_te = train_test_split(
+    X, y, test_size=0.2, stratify=y, random_state=SEED
+)
+
+# El test solo debe contener adultos según el criterio del estudio
+filtro_adultos_te = X_te["edad"] >= EDAD_MINIMA
+X_te, y_te = X_te[filtro_adultos_te], y_te[filtro_adultos_te]
+
+print("Total", X.shape, "| train", X_tr.shape, "| test", X_te.shape)
+print("Menores: en train", int((X_tr["edad"] < EDAD_MINIMA).sum()), 
+      "| en test", int((X["edad"] < EDAD_MINIMA).sum() - (X_tr["edad"] < EDAD_MINIMA).sum()))
+
+# Comprobación de proporciones idénticas en ambas particiones
+display(pd.DataFrame({
+    "train": y_tr.value_counts(normalize=True), 
+    "test": y_te.value_counts(normalize=True)
+}).sort_index().round(3))
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se acepta el código para la partición hold-out. Al ejecutarlo se comprueba que de los 4 menores de la base de datos, los 4 cayeron por azar estratificado en el conjunto de entrenamiento y 0 en test, manteniendo las proporciones de las tres clases idénticas (50% clase 0, 30% clase 1 y 20% clase 2).
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+tenemos claras las reglas de lo que es imposible segun el eda: - hdl <= 0 y trigliceridos <= 0 - alcohol < 0 - imc < 13 - ejercicio > 7 - hba1c < 3 - presion sistolica <= diastolica o sistolica < 60 o diastolica < 40 - anos fumador > edad y para eliminar filas solo los menores (< 18) y si tiene mas anos fumando que edad porque ese paciente no tiene sentido. hazme dos funciones: mascaras_invalidas(X) que devuelva un diccionario con las mascaras booleanas de cada columna y filas_a_eliminar(X) con los que no se deben usar para entrenar
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aquí tienes la implementación modular de ambas funciones lógicas basadas en tus umbrales de dominio clínico:
+
+EDAD_MINIMA = 18
+IMC_MINIMO = 13
+HBA1C_MINIMA = 3
+EJERCICIO_MAXIMO = 7
+SISTOLICA_MINIMA = 60
+DIASTOLICA_MINIMA = 40
+
+def mascaras_invalidas(X):
+    """Devuelve {columna: máscara booleana} con las celdas imposibles según el EDA."""
+    invertida = X["presion_sistolica"] <= X["presion_diastolica"]
+    return {
+        "colesterol_hdl": X["colesterol_hdl"] <= 0,
+        "trigliceridos": X["trigliceridos"] <= 0,
+        "consumo_alcohol_semanal": X["consumo_alcohol_semanal"] < 0,
+        "indice_masa_corporal": X["indice_masa_corporal"] < IMC_MINIMO,
+        "frecuencia_ejercicio_semanal": X["frecuencia_ejercicio_semanal"] > EJERCICIO_MAXIMO,
+        "hemoglobina_glicosilada": X["hemoglobina_glicosilada"] < HBA1C_MINIMA,
+        "presion_sistolica": invertida | (X["presion_sistolica"] < SISTOLICA_MINIMA),
+        "presion_diastolica": invertida | (X["presion_diastolica"] < DIASTOLICA_MINIMA),
+        "anos_fumador": X["anos_fumador"] > X["edad"],
+    }
+
+def filas_a_eliminar(X):
+    """Menores y pacientes con más años fumando que edad."""
+    return (X["edad"] < EDAD_MINIMA) | (X["anos_fumador"] > X["edad"])
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se aceptan las funciones. Al ser reglas fijas del dominio médico que no calculan medias ni parámetros estadísticos de los datos, no provocan fuga de información aunque se evalúen sobre el dataframe antes de pasar al pipeline.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+dame una celda que junte las mascaras de imposibles que acabamos de definir con el conteo de valores nulos del dataframe para tener una tabla ordenada con todos los problemas detectados en cada columna, y que me imprima cuantas filas en total tienen algun valor imposible y cuantas filas se van a eliminar para entrenar
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Con este bloque generas el informe cuantitativo consolidado de celdas imposibles y valores nulos:
+
+mascaras = mascaras_invalidas(X)
+resumen = pd.DataFrame({
+    "imposibles": {c: int(m.sum()) for c, m in mascaras.items()},
+    "nulos": X.isna().sum(),
+}).fillna(0).astype(int)
+
+# Filtramos solo las columnas que tienen al menos un problema registrado
+resumen = resumen[resumen.sum(axis=1) > 0].sort_values(["imposibles", "nulos"], ascending=False)
+
+print("Filas con algún valor imposible:", int(pd.concat(mascaras, axis=1).any(axis=1).sum()), "de", len(X))
+print("Filas que no se usan para entrenar:", int(filas_a_eliminar(X).sum()))
+display(resumen)
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se acepta el código para resumir las problemáticas. Los resultados muestran que hay 279 filas afectadas por valores imposibles en todo el dataset (siendo alcohol con 177 casos y las presiones con 44 y 47 los mayores causantes), mientras que las filas a descartar para entrenar son solo 4.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+en el informe tenemos que justificar por que no eliminamos los valores atipicos que no son imposibles tipo la pcr muy alta o la glucosa alta. redactame la justificacion clinica de por que solo corregimos lo imposible y conservamos el resto de atipicos
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aquí tienes la justificación metodológica y clínica para el apartado de criterios generales:
+
+### 4.1 Atípicos: solo se corrige lo imposible
+Decisión: un valor solo se modifica si es imposible según las reglas de dominio. El resto de atípicos se conserva.
+
+Justificación:
+- En medicina, los valores extremos (PCR, glucosa, triglicéridos o presión arterial muy altas) no son fallos de lectura, sino que caracterizan precisamente a los pacientes con daño vascular severo o alto riesgo cardiovascular (Clase 2), que es el grupo clínico crítico que el sistema debe detectar.
+- Eliminar o recortar a ciegas estos registros privaría a los modelos de la señal predictiva más relevante.
+- La problemática de su impacto sobre estimadores sensibles a la escala (regresión logística, SVM) se abordará mediante escalado robusto o transformaciones en los preprocesados posteriores, sin necesidad de destruir muestras válidas de pacientes reales.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Nos quedamos con la justificación de momento, aunque sea posible que en futuras iteraciones la cambiemos
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+dame una celda para justificar que nos quedamos con nivel actividad aunque sea subjetiva.  saca una tabla con el conteo de cada nivel, su ejercicio medio y su riesgo medio para justificar por que la mantenemos en el notebook
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Esta tabla sintetiza la paradoja entre la percepción subjetiva y el valor predictivo de la variable:
+
+ORDINAL = "nivel_actividad"
+ORDEN_ACTIVIDAD = {"Sedentario": 0, "Ligeramente activo": 1, "Moderadamente activo": 2, "Muy activo": 3}
+
+display(pd.DataFrame({
+    "n": X[ORDINAL].value_counts(),
+    "ejercicio_medio": X.groupby(ORDINAL)["frecuencia_ejercicio_semanal"].mean(),
+    "riesgo_medio": y.groupby(X[ORDINAL]).mean(),
+}).loc[list(ORDEN_ACTIVIDAD)].round(2))
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se acepta el código y se incorpora la tabla. Aunque el ejercicio medio apenas varía entre sedentarios (2.66 días) y muy activos (2.79 días), el riesgo cardiovascular medio cae de forma estrictamente monótona del 0.98 al 0.36, demostrando que aporta una señal predictiva enorme que no se debe eliminar.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+para la tecnica 1 (p1) de limpieza clinica hemos decidido recortar al limite valido cosas como alcohol negativo, imc bajo, ejercicio >7 o hba1c <3, en vez de poner nan o eliminar filas. explicame en texto para el notebook por que recortar conserva mejor la señal que imputar con la mediana usando el dato del riesgo medio del alcohol
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aquí tienes la justificación comparativa de las tres estrategias:
+
+### 6.1 ¿Por qué recortar los imposibles y no pasarlos a NaN ni eliminar la fila?
+Hay tres estrategias posibles:
+
+| Estrategia | Problema |
+| :--- | :--- |
+| Eliminar la fila | Se perderían 279 de 2.254 pacientes (12% del total de la cohorte). |
+| Pasar a NaN e imputar con la mediana | Borra la información y distorsiona el perfil real del paciente. |
+| Recortar al límite válido | Conserva el orden de magnitud y la señal clínica original. |
+
+El diagnóstico evidenció que los valores imposibles no son ruido puramente estocástico: los pacientes con consumo_alcohol_semanal negativo presentan un riesgo medio de 0.21, frente al 0.70 de la media global de la cohorte. Un valor de -5 procede de ruido de generación sobre pacientes no bebedores. Si se recorta a 0, la variable sigue indicando "abstemio / consumo nulo", preservando intacta su condición protectora. Si se pasara a NaN, la mediana le asignaría un consumo positivo medio falseando su estilo de vida.
+
+Para la presión arterial y los años de tabaquismo no existe un límite fijo universal porque dependen de otra variable acoplada (la diastólica y la edad), por lo que en esos casos sí se convierten a NaN para imputación controlada.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se adopta la explicación como base para la memoria del notebook.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+dame la clase TratarImposibles compatible con scikit learn que use las funciones de antes y recorte con LIMITES_RECORTE las que tienen limite propio, y a presion y anos fumador les meta NaN
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aquí tienes la implementación del transformador personalizado para Scikit-Learn:
+
+from sklearn.base import BaseEstimator, TransformerMixin
+
+# Límite válido al recortar: (mínimo, máximo); None indica sin límite por ese extremo
+LIMITES_RECORTE = {
+    "colesterol_hdl": (1, None),
+    "trigliceridos": (1, None),
+    "consumo_alcohol_semanal": (0, None),
+    "indice_masa_corporal": (IMC_MINIMO, None),
+    "frecuencia_ejercicio_semanal": (None, EJERCICIO_MAXIMO),
+    "hemoglobina_glicosilada": (HBA1C_MINIMA, None),
+}
+
+class TratarImposibles(BaseEstimator, TransformerMixin):
+    """Recorta los imposibles a su límite válido. Si la variable no tiene límite propio 
+    (presión y años fumando), la celda pasa a NaN. No aprende de los datos, fit devuelve self."""
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        X = X.copy()
+        for columna, mascara in mascaras_invalidas(X).items():
+            if columna in LIMITES_RECORTE:
+                X[columna] = X[columna].clip(*LIMITES_RECORTE[columna])
+            else:
+                X.loc[mascara, columna] = np.nan
+        return X
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se acepta e incluye la clase en el cuaderno.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+quiero comprobar con datos que la presion de pulso solo da problemas cuando es menor o igual a cero y no cuando es baja pero positiva. hazme una celda que calcule la diferencia entre sistolica y diastolica, la divida en los tramos <=0, de 0 a 10, de 10 a 25 y mayor de 25, y me saque el recuento de pacientes y el riesgo medio de cada tramo junto a los que tienen sistolica < 60 y diastolica < 40
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Este análisis empírico valida la decisión sobre el umbral hemodinámico:
+
+pulso = X["presion_sistolica"] - X["presion_diastolica"]
+tramos = pd.cut(pulso, [-np.inf, 0, 10, 25, np.inf], labels=["<= 0", "(0, 10]", "(10, 25]", "> 25"])
+
+display(pd.DataFrame({
+    "n": tramos.value_counts(), 
+    "riesgo_medio": y.groupby(tramos, observed=False).mean()
+}).round(2))
+
+print("Sistólica < 60:", int((X["presion_sistolica"] < SISTOLICA_MINIMA).sum()),
+      "| diastólica < 40:", int((X["presion_diastolica"] < DIASTOLICA_MINIMA).sum()))
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se integra la celda. 
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+para colesterol_total hemos visto que no cuadra con la formula de fridewalde (hdl + ldl + tg/5) y que en un 26 porciento de los pacientes es menor que hdl + ldl. dame el codigo que calcule la correlacion entre el valor registrado y la formula, el porcentaje de casos donde total < hdl + ldl, la correlacion de ambos con el target y los casos fuera de fridewalde ese. redactame tambien el texto explicando por que se elimina la columna entera y por que no tiene sentido recalcularla con la formula
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aquí tienes el bloque de análisis y la justificación metodológica completa:
+
+```python
+formula = X["colesterol_hdl"] + X["colesterol_ldl"] + X["trigliceridos"] / 5
+validos = X["colesterol_ldl"].notna()
+
+print("Correlación registrado-fórmula:", round(X["colesterol_total"].corr(formula), 3))
+print("Total registrado < HDL + LDL:",
+      f"{(X['colesterol_total'] < X['colesterol_hdl'] + X['colesterol_ldl'])[validos].mean():.1%}",
+      "de los pacientes con LDL conocido")
+print("Correlación con el target: registrado", round(X["colesterol_total"].corr(y), 3),
+      "| fórmula", round(formula.corr(y), 3))
+print("Triglicéridos > 400 (fuera del rango de Friedewald):", int((X["trigliceridos"] > 400).sum()),
+      "| nulos de LDL:", int(X["colesterol_ldl"].isna().sum()))
+```
+### 6.4 Colesterol total: se elimina
+Decisión: colesterol_total se elimina definitivamente de la matriz de características. No se recalcula con la fórmula.
+
+Por qué el valor registrado no sirve:
+- La correlación entre el valor registrado y la fórmula bioquímica es de apenas 0.026 (nula).
+- En el 26.4% de los sujetos con LDL medido, el colesterol total es estrictamente inferior a la suma de sus fracciones HDL + LDL, lo cual representa una imposibilidad física.
+- Su correlación con el riesgo cardiovascular es residual (0.082).
+
+Por qué no recalcularla mediante Friedewald:
+1. No aporta información nueva: sería una combinación lineal exacta de HDL, LDL y triglicéridos, variables que los modelos ya reciben directamente.
+2. Es una estimación con restricciones: la ecuación no es válida con triglicéridos > 400 mg/dL (54 casos en la cohorte).
+3. Propagación de imputaciones: al tener colesterol_ldl 135 valores nulos, recalcular el total forzaría a imputar previamente el LDL, transmitiendo el error de imputación a una variable sintética artificial.
+4. No mejora el poder discriminatorio: la fórmula mantiene una correlación casi idéntica con el target (0.074).
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se acepta tanto el bloque de código. El texto no sirve como base para la explicación.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+hazme la clase TransformarColumnas que aplique en transform() el redondeo hacia arriba con np.ceil en frecuencia_ejercicio_semanal, convierta nivel_actividad a numeros con el diccionario ORDEN_ACTIVIDAD y elimine colesterol_total
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aquí tienes la clase TransformarColumnas adaptada al flujo de transformadores del pipeline:
+
+class TransformarColumnas(BaseEstimator, TransformerMixin):
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        X = X.copy()
+        X["frecuencia_ejercicio_semanal"] = np.ceil(X["frecuencia_ejercicio_semanal"])
+        X[ORDINAL] = X[ORDINAL].map(ORDEN_ACTIVIDAD).astype(float)
+        return X.drop(columns="colesterol_total")
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se acepta el código de la clase. Agrupa limpiamente las transformaciones de columnas de P1 sin necesidad de almacenar estado.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+dame la celda final que aplique TratarImposibles y TransformarColumnas sobre X y compare en una tabla el minimo, maximo y numero de nulos antes y despues en todas las columnas afectadas, ademas de comprobar que el ejercicio pasa a tener solo valores enteros del 0 al 7 y como cambia su media
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Con esta celda se audita cuantitativamente el efecto exacto de la técnica de limpieza:
+
+limpio = TransformarColumnas().fit_transform(TratarImposibles().transform(X))
+cols = list(mascaras)
+
+display(pd.DataFrame({
+    "min_original": X[cols].min(), "min_limpio": limpio[cols].min(),
+    "max_original": X[cols].max(), "max_limpio": limpio[cols].max(),
+    "nulos_original": X[cols].isna().sum(), "nulos_limpio": limpio[cols].isna().sum(),
+}).round(2))
+
+e0, e1 = X["frecuencia_ejercicio_semanal"], limpio["frecuencia_ejercicio_semanal"]
+print("Ejercicio. Antes: no enteros", f"{(e0 != e0.round()).mean():.1%}", "| media", round(e0.mean(), 2),
+      "|| Después: valores", sorted(e1.unique().astype(int)), "| media", round(e1.mean(), 2))
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se acepta y se comprueba la tabla de salida. Se constata que los mínimos negativos desaparecen (alcohol pasa de -5.0 a 0.0, HDL y triglicéridos a 1.0, IMC a 13.0), el ejercicio pasa de tener un 81.5% de valores con decimales a ser estrictamente enteros entre 0 y 7, y las únicas columnas que generan nulos nuevos para imputar son las presiones (44 sistólicas y 47 diastólicas) y un caso de años de fumador.
+\end{iaanalisis}
+
 
 \end{document}
 
