@@ -3109,6 +3109,345 @@ Corrección conceptual directa a la herramienta: la IA aplicaba un redondeo est�
     \item \textbf{Precedencia lógica en la presión arterial:} Se detectó que el orden de enmascaramiento propuesto por la IA destruía la detección de la presión invertida al introducir un valor \texttt{NaN} previo; se obligó a anteponer la regla cruzada.
 \end{itemize}
 
+
+
+\begin{iaprompt}
+Cómo puedo imprimir los nulos del df por columna?
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+¡Claro! Para analizar los valores ausentes de forma clara y estructurada en
+Pandas, lo más recomendable es construir una tabla resumen que muestre tanto el
+recuento absoluto como el porcentaje relativo sobre el total de registros.
+
+Aquí tienes un fragmento de código eficiente y directo para lograrlo:
+
+# 1. Total global de valores nulos en todo el DataFrame
+print("Valores nulos: ", df.isnull().sum().sum())
+
+# 2. Construcción de una tabla resumen con cantidad y porcentaje por columna
+df_resumen_nulos = pd.DataFrame({
+    'Nulos': df.isnull().sum(),
+    'Porcentaje (%)': (df.isnull().mean() * 100).round(2)
+})
+
+# 3. Filtrar solo las columnas que presentan valores nulos y ordenar descendentemente
+df_resumen_nulos = df_resumen_nulos[df_resumen_nulos['Nulos'] > 0].sort_values(by='Nulos', ascending=False)
+
+# 4. Visualizar la tabla resultante
+df_resumen_nulos
+
+¿Por qué es una buena solución?
+
+  - Eficiencia: El uso de df.isnull().mean() * 100 calcula directamente la
+    proporción relativa sin necesidad de llamar a len(df) de forma manual.
+  - Claridad en el EDA: Al filtrar con [df_resumen_nulos['Nulos'] > 0] y ordenar
+    de mayor a menor, aíslas inmediatamente las variables problemáticas sin
+    sobrecargar la pantalla con las columnas que están completas al 100%. Esto
+    te permite priorizar qué atributos requerirán imputación (como SimpleImputer
+    o KNNImputer) en la fase de preprocesamiento.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+La respuesta a la consulta responde con lo pedido, pero además incluye el porcentaje de nulos por columna y los ordena por número de nulos, lo que es bastante útil. Se acepta.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+df = df[df['edad'] >= 18]
+
+Cómo muestro cuántos he eliminado?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Para verificar y dejar constancia de cuántos registros se han descartado durante
+el filtrado de la cohorte, una forma muy sencilla y limpia es guardar el número
+de filas antes de la operación y compararlo con el recuento posterior.
+
+Aquí tienes el código para implementarlo de forma directa:
+
+# Guardar el número inicial de registros en el dataset
+filas = df.shape[0]
+
+# Filtrar para conservar únicamente a la población adulta (edad >= 18)
+df = df[df['edad'] >= 18]
+
+# Mostrar la diferencia de registros eliminados y el total restante
+print(filas - df.shape[0], "filas eliminadas por ser menores de edad. Hay ", df.shape[0], "filas restantes.")
+
+# Actualizar la variable con el nuevo conteo de filas
+filas = df.shape[0]
+
+¿Por qué es recomendable hacerlo así?
+
+  - Trazabilidad en la memoria: En proyectos del ámbito biomédico es fundamental
+    documentar cada paso de exclusión de pacientes (siguiendo diagramas de flujo
+    tipo CONSORT o STARD). Al calcular la diferencia directamente con
+    df.shape[0], te aseguras de que el informe refleje con exactitud cuántos
+    casos pediátricos fueron eliminados (en este caso, 4 registros).
+  - Consistencia del entorno: Al reasignar filas = df.shape[0] al final, dejas
+    esa variable actualizada para poder reutilizarla en futuros filtros de
+    limpieza (por ejemplo, si más adelante descartas filas con errores graves)
+    sin tener que definir variables auxiliares adicionales.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Responde a lo pedido. Se acepta.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+Cómo pongo a NaN los valores negativos o 0 de colesterol_hdl?
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Para sustituir los valores biológicamente imposibles (\le 0) por np.nan sin
+alterar el resto de columnas del paciente, la forma más directa, legible y
+recomendada en Pandas es utilizar .loc con una condición booleana.
+
+Aquí tienes el código con la comprobación de cuántos registros se han
+modificado:
+
+import numpy as np
+
+# 1. Contar cuántos valores inválidos hay antes del cambio (para trazabilidad)
+n_invalidos = (df['colesterol_hdl'] <= 0).sum()
+
+# 2. Asignar np.nan a los valores menores o iguales a cero
+df.loc[df['colesterol_hdl'] <= 0, 'colesterol_hdl'] = np.nan
+
+# 3. Confirmar la operación
+print(f"Se han reemplazado {n_invalidos} valores de 'colesterol_hdl' (<= 0) por NaN.")
+
+Alternativa funcional elegante: .mask()
+
+Si prefieres no usar indexación por .loc, Pandas cuenta con el método .mask(),
+que reemplaza por NaN (por defecto) aquellos valores que cumplan la condición
+indicada:
+
+# Reemplaza cualquier valor <= 0 por NaN de forma directa
+df['colesterol_hdl'] = df['colesterol_hdl'].mask(df['colesterol_hdl'] <= 0)
+
+Justificación metodológica (para la memoria):
+
+  - No descartar al paciente: Al convertir los valores absurdos a np.nan en
+    lugar de borrar la fila completa (df.dropna()), se preserva el resto del
+    historial clínico del paciente (edad, tensión, hábitos, comorbilidades).
+  - Compatibilidad con imputación: Estos NaN recién creados serán rellenados de
+    manera coherente en la siguiente fase de preprocesamiento mediante técnicas
+    como KNNImputer o SimpleImputer(strategy='median'), evitando introducir
+    sesgo en los clasificadores.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+De las dos opciones se elige la primera al ser más intuitiva, pero cambiando el print().
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+Haz que sea NaN en ambas columnas si IMC es mayor que 35 y el perímetro de la
+cintura es menor que 70
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Para invalidar ambas variables de forma simultánea cuando se detecta esa
+discordancia antropométrica (obesidad severa con una cintura incompatible de
+extrema delgadez), puedes usar .loc pasando una lista con los nombres de las dos
+columnas.
+
+Aquí tienes el código limpio y con control del número de casos afectados:
+
+import numpy as np
+
+# 1. Definir la condición de inconsistencia antropométrica severa
+condicion_antropo = (df['indice_masa_corporal'] > 35) & (df['perimetro_cintura'] < 70)
+
+# 2. Contar cuántos pacientes presentan esta anomalía antes de modificar
+n_inconsistencias = condicion_antropo.sum()
+
+# 3. Asignar NaN a ambas columnas simultáneamente en las filas afectadas
+df.loc[condicion_antropo, ['indice_masa_corporal', 'perimetro_cintura']] = np.nan
+
+# 4. Mensaje informativo de confirmación
+print(f"Se han puesto a NaN ambas columnas en {n_inconsistencias} registros por inconsistencia IMC-Cintura.")
+
+Justificación para la memoria técnica:
+
+  - Incoherencia fisiológica cruzada: Un IMC > 35 kg/m² indica obesidad grado II
+    o III, lo que anatómicamente resulta incompatible con una circunferencia de
+    cintura inferior a 70 cm en un adulto.
+  - Neutralización del dato corrupto: Dado que no es posible determinar cuál de
+    los dos valores fue el erróneo en la toma de datos clínicos (si el
+    peso/altura o la cinta métrica), se enmascaran ambos a np.nan para que un
+    algoritmo de imputación multivariante (como KNNImputer) los reconstruya a
+    partir del resto de variables del paciente (edad, tensión, analítica
+    sanguínea, etc.).
+
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se acepta, pero variando el código ligeramente para que sea más intuitivo y ocupe menos líneas.
+\end{iaanalisis}
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Qué debería de aplicarle a antecedentes_familiares_tipo y tipo_alimentacion? un
+one-hot-encoding? y a nivel_actividad un ordinal? Recuerda que nivel_actividad
+era Sedentario, Ligeramente activo, Moderadamente activo y Muy activo
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Sí, tu intuición es totalmente correcta. Esa es exactamente la decisión
+metodológica adecuada tanto desde el punto de vista matemático como clínico.
+
+Aquí tienes la justificación de cada una y cómo implementarlo para evitar
+errores comunes:
+
+1. tipo_alimentacion \rightarrow One-Hot Encoding
+
+  - Por qué: Es una variable nominal pura. No existe un orden matemático
+    intrínseco (la dieta Mediterránea no es "mayor" o "menor" que la Vegetariana
+    ni que la Baja en carbohidratos).
+  - Si le asignaras números (1, 2, 3, 4), modelos como la Regresión Logística
+    interpretarían erróneamente que una dieta es el triple que otra.
+
+2. antecedentes_familiares_tipo \rightarrow One-Hot Encoding
+
+  - Por qué: Sus valores son 'Ninguno', 'Materno', 'Paterno' y 'Ambos'.
+  - Aunque 'Ambos' representa una mayor carga genética que 'Ninguno', entre
+    'Materno' y 'Paterno' no existe un orden biológico jerárquico (la línea
+    paterna no es "superior" a la materna). Tratarla como ordinal obligaría a
+    darle un número mayor a uno que al otro sin justificación médica.
+  - Con One-Hot Encoding cada línea de antecedente se evalúa como una hipótesis
+    independiente sin forzar una jerarquía artificial.
+
+3. nivel_actividad \rightarrow Ordinal Encoding
+
+  - Por qué: Es una variable ordinal estricta. Existe una relación monótona
+    clara de menor a mayor gasto energético:
+    \text{Sedentario (0)} < \text{Ligeramente activo (1)} < \text{Moderadamente activo (2)} < \text{Muy activo (3)}
+  - Ventajas:
+      - Permite al modelo aprender que pasar de Sedentario a Muy activo tiene un
+        efecto acumulativo protector frente al riesgo cardiovascular.
+      - Ahorra dimensionalidad: genera una sola columna numérica en lugar de
+        crear 4 variables dummy.
+
+⚠️ Cuidado con un error muy común en Scikit-Learn
+
+Si usas OrdinalEncoder() por defecto, ordenará las categorías alfabéticamente,
+asignando:
+
+  - Ligeramente activo \rightarrow 0
+  - Moderadamente activo \rightarrow 1
+  - Muy activo \rightarrow 2
+  - Sedentario \rightarrow 3 (¡lo cual rompería el orden clínico!)
+
+Para solucionarlo, debes pasarle la lista con el orden explícito en el parámetro
+categories.
+
+Implementación óptima con ColumnTransformer:
+
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
+
+# 1. Definir las listas de columnas
+cols_nominales = ['tipo_alimentacion', 'antecedentes_familiares_tipo']
+cols_ordinales = ['nivel_actividad']
+
+# 2. Definir el orden clínico exacto para la variable ordinal
+orden_actividad = [['Sedentario', 'Ligeramente activo', 'Moderadamente activo', 'Muy activo']]
+
+# 3. Construir el transformador categórico
+encoder_categorico = ColumnTransformer(transformers=[
+    ('nom', OneHotEncoder(drop='first', handle_unknown='ignore'), cols_nominales),
+    ('ord', OrdinalEncoder(categories=orden_actividad), cols_ordinales)
+], remainder='passthrough')
+
+(Nota: Usar drop='first' en el OneHotEncoder es fundamental para evitar la
+trampa de la multicolinealidad en modelos lineales como la Regresión Logística).
+
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se confirma que el tratamiento de nominales es el correcto, pero no se buscaba hacer la transformación aún, sino preparar las funciones para que sean reutilizables.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+no quiero realizar la transformación aún
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Es una excelente práctica dejar los transformadores solo configurados e
+instanciados, sin aplicar el .fit_transform() todavía, para reservarlos y
+acoplarlos más adelante al pipeline de entrenamiento evitando cualquier tipo de
+data leakage.
+
+Siguiendo esa estructura modular (declarando primero las columnas y jerarquías
+fuera para que el código quede limpio y desacoplado), la forma recomendada de
+definirlo es la siguiente:
+
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
+
+# ------------------------------------------------------------------------------
+# 1. DEFINICIÓN DE GRUPOS DE VARIABLES Y JERARQUÍAS CLÍNICAS
+# ------------------------------------------------------------------------------
+# Variables nominales puras (sin orden intrínseco)
+cols_nominales = ['tipo_alimentacion', 'antecedentes_familiares_tipo']
+
+# Variable ordinal (con progresión física monótona)
+cols_ordinales = ['nivel_actividad']
+
+# Escala de actividad física ordenada estrictamente de menor a mayor esfuerzo
+orden_nivel_actividad = [
+    ['Sedentario', 'Ligeramente activo', 'Moderadamente activo', 'Muy activo']
+]
+
+# ------------------------------------------------------------------------------
+# 2. INSTANCIACIÓN DE ENCODERS (SIN APLICAR TRANSFORMACIÓN AÚN)
+# ------------------------------------------------------------------------------
+# Encoder para nominales: drop='first' para prevenir colinealidad en modelos lineales
+encoder_nominal = OneHotEncoder(
+    drop='first', 
+    handle_unknown='ignore'
+)
+
+# Encoder para ordinales: mapeo clínico controlado a escala [0, 1, 2, 3]
+encoder_ordinal = OrdinalEncoder(
+    categories=orden_nivel_actividad
+)
+
+¿Por qué dejarlo así preparado?
+
+  - Separación de responsabilidades: Mantienes las listas de atributos
+    (cols_nominales, cols_ordinales) y las jerarquías en variables
+    independientes, facilitando cambios futuros sin tocar la configuración de
+    los estimadores.
+  - Listo para el Pipeline: Al estar instanciados como objetos de Scikit-Learn
+    (encoder_nominal y encoder_ordinal), quedan preparados para ser introducidos
+    directamente en el ColumnTransformer cuando se construya el esquema de
+    validación cruzada.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se acepta, pero simplificándolo en 2 líneas.
+\end{iaanalisis}
+
+
+
 \end{document}
 
 
