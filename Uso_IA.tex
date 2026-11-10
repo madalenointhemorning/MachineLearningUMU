@@ -2898,6 +2898,216 @@ print("Ejercicio. Antes: no enteros", f"{(e0 != e0.round()).mean():.1%}", "| med
 Se acepta y se comprueba la tabla de salida. Se constata que los mínimos negativos desaparecen (alcohol pasa de -5.0 a 0.0, HDL y triglicéridos a 1.0, IMC a 13.0), el ejercicio pasa de tener un 81.5% de valores con decimales a ser estrictamente enteros entre 0 y 7, y las únicas columnas que generan nulos nuevos para imputar son las presiones (44 sistólicas y 47 diastólicas) y un caso de años de fumador.
 \end{iaanalisis}
 
+Alejandro:
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Queremos documentar en el EDA la justificación bibliográfica de los mínimos plausibles para la presión sistólica (60 mmHg) y diastólica (40 mmHg). Busca y verifica fuentes médicas acreditadas para citarlas. Además, ayuda a modularizar el código de preprocesamiento que diseñamos en el borrador técnico del workspace para estructurarlo en funciones reproducibles y extensibles a nuevos preprocesados sin salir del directorio de trabajo.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Claude Code (Claude Opus 5.5), CLI en Windows}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+EDA: añadió el apartado "Mínimos plausibles de la presión arterial" (sistólica 60 mmHg, diastólica 40 mmHg) con tres enlaces que comprobó antes de citarlos:
+- NHLBI: la hipotensión empieza por debajo de 90/60 mmHg.
+- MedlinePlus: la presión normal está entre 90/60 y 120/80 mmHg; el shock es una emergencia.
+- Surviving Sepsis Campaign 2021: objetivo de presión arterial media >= 65 mmHg. Con 60/40 sale unos 47 mmHg.
+Añadió también código que cuenta los 4 pacientes por debajo de los mínimos.
+
+Preprocesamiento: estructuró el cuaderno siguiendo las especificaciones del borrador técnico:
+- Cada paso es una función df -> df que imprime lo que hace de forma transparente.
+- Las reglas de valores imposibles e incoherencias están en dos tablas (REGLAS_RANGO, REGLAS_CRUZADAS).
+- PREPROCESADOS guarda cada preprocesado como una lista de pasos: P0_base, P1_limpieza, P2_diabetes, P3_pcr.
+- Codificación, mediana y escalado dentro de un Pipeline ajustado solo con el train.
+- Evaluación con modelos de referencia (Random Forest, SVM, KNN), computando accuracy, F1 macro y recall de alto riesgo en train y test.
+
+Ajustes técnicos adicionales: particiones estratificadas compartidas entre variantes, preservación de pacientes con PCR nula al filtrar casos agudos (> 10 mg/L) y fijación global de SEED.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+El diseño de la limpieza (definición de cotas, reglas cruzadas y comparación incremental P0--P3) fue definido previamente por el equipo. La herramienta se utilizó para agilizar la modularización del código y localizar fuentes oficiales que respalden los umbrales de shock circulatorio. Se verificó manualmente la validez de los enlaces clínicos incorporados. Al refactorizar, la herramienta omitió el redondeo hacia arriba del ejercicio que teníamos previsto; se ordenó su reincorporación en la interacción posterior.
+\end{iaanalisis}
+
+% ---------------------------------------------------------------------------------------------------
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aplica una regularización mínima de control a los clasificadores base para mitigar el sobreajuste severo sin entrar aún en optimización formal. Reincorpora el redondeo hacia arriba en la frecuencia de ejercicio semanal y realiza una auditoría comparativa frente a los hallazgos del EDA para reportar qué inconsistencias quedan sin tratar en esta primera iteración.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Claude Code (Claude Opus 5.5), CLI en Windows}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Modelos (ajuste de control para estabilizar la evaluación preliminar):
+- Random Forest: max_depth=8, min_samples_leaf=5. Diferencia F1 train-test: 0,39 -> 0,31.
+- SVM: C=10 -> C=1. Diferencia F1 train-test: 0,41 -> 0,21; F1 en test: 0,59 -> 0,65.
+
+Redondeo: frecuencia_ejercicio_semanal hacia arriba, posterior al enmascaramiento de valores > 7.
+
+Comparación con el EDA (auditoría informativa de 10 puntos):
+1. Desbalanceo de clases sin tratar (class_weight="balanced" sube el recall de alto riesgo de 0,53 a 0,75).
+2. Asimetría de PCR y ácido úrico sin transformar.
+3. Sensibilidad a valores atípicos en estimadores lineales/geométricos (SVM y KNN).
+4. Discrepancia entre nivel_actividad subjetivo y frecuencia deportiva.
+5. Presencia de decimales continuos en otras magnitudes discretas.
+6. Mínimos biológicos pendientes en sueño, cintura y pulso.
+7. Presencia de años de exposición tabáquica en no fumadores activos.
+8. Mecanismo de generación de datos faltantes no categorizado.
+9. Conflicto en el orden de ejecución: la regla sistólica < 60 se evalúa antes de la transposición diastólica >= sistólica.
+10. La regla de años fumando > edad no afecta a adultos (el único caso era menor de edad).
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se restringió la intervención de la IA a una regularización de salvaguarda básica, ya que el ajuste exhaustivo de hiperparámetros corresponde a fases posteriores (requisito 3.3). Asimismo, se exigió que el chequeo de discrepancias con el EDA fuera estrictamente analítico, reservando al equipo la decisión de qué problemáticas abordar en cada variante.
+\end{iaanalisis}
+
+% ---------------------------------------------------------------------------------------------------
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Respecto al informe anterior, ¿se ha corregido la prioridad en la regla de presión arterial? Por otra parte, para comparar los preprocesados no podemos basarnos únicamente en valores medios; incluye la desviación estándar (media +- std) en todas las métricas para evaluar si las diferencias observadas son estadísticamente significativas o mero ruido de partición.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Claude Code (Claude Opus 5.5), CLI en Windows}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Punto 9 (orden de reglas): se mantenía sin corregir a nivel de código, figurando únicamente como advertencia en el informe.
+
+Métricas y variabilidad: se actualizaron todas las salidas para presentar media +- desviación típica a lo largo de las iteraciones de validación, computando también la brecha train-test. Al visibilizar la dispersión, se comprueba que las variaciones de rendimiento entre las primeras variantes de preprocesamiento se encuentran dentro del margen de error de la partición.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Intervención crítica del equipo: la IA calculaba únicamente métricas puntuales promedio, lo que inducía al error metodológico de atribuir mejoras a cambios de preprocesamiento cuando en realidad quedaban solapados por la varianza de la partición. Incorporar la desviación típica aportó el rigor empírico necesario para interpretar los resultados de forma realista.
+\end{iaanalisis}
+
+% ---------------------------------------------------------------------------------------------------
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Explica con precisión cuál es el conflicto técnico en el punto 9 con el orden de las reglas de presión y por qué afecta al filtrado de datos.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Claude Code (Claude Opus 5.5), CLI en Windows}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Un paciente de la cohorte presenta sistólica de 52,2 mmHg y diastólica de 90,6 mmHg (caso simultáneo de hipotensión severa e inversión de presiones).
+Si se aplica primero la regla de rango mínimo (sistólica < 60), el valor 52,2 se sustituye inmediatamente por NaN.
+Al evaluarse a continuación la regla cruzada (diastólica >= sistólica), la comparación lógica 90,6 >= NaN resulta en False. Como consecuencia, el registro no se cataloga como presión invertida y la diastólica errónea de 90,6 mmHg sobrevive intacta.
+Invirtiendo el orden, se detecta primero la incongruencia global y ambas magnitudes se convierten a NaN para su imputación correcta.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se solicitó el diagnóstico detallado para verificar el impacto matemático antes de autorizar cualquier modificación del pipeline. Se constató que se trataba de un efecto de borde generado por la propagación de nulos en comparaciones booleanas sobre Pandas.
+\end{iaanalisis}
+
+% ---------------------------------------------------------------------------------------------------
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Reordena las operaciones en el pipeline para anteponer la detección de presión invertida a los límites individuales y documenta brevemente el motivo en la sección correspondiente del notebook.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Claude Code (Claude Opus 5.5), CLI en Windows}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Se independizó el paso en la función nan_presion_invertida, ubicándolo con precedencia sobre la comprobación de límites absolutos. Se redactó una nota técnica explicativa en el apartado 3.2. Con este cambio, los 44 casos invertidos son capturados íntegramente y la regla de corte inferior a 60 mmHg pasa a computar 0 incidencias redundantes.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se validó la solución inspeccionando directamente el índice del paciente afectado, verificando que ambos campos hemodinámicos quedan asignados a NaN de forma consistente para su tratamiento conjunto.
+\end{iaanalisis}
+
+% ---------------------------------------------------------------------------------------------------
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Los estimadores basados en árboles en versiones modernas de scikit-learn gestionan de forma nativa los valores faltantes. ¿Se está teniendo esto en cuenta en el diseño, o se está forzando la imputación por mediana a todos los modelos por defecto?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Claude Code (Claude Opus 5.5), CLI en Windows}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+El pipeline inicial aplicaba SimpleImputer(strategy="median") indistintamente a toda la batería de clasificadores. En scikit-learn (>= 1.4), RandomForestClassifier soporta valores NaN en el entrenamiento mediante enrutamiento por histograma/potencial de partición. Una prueba preliminar evidenció que la discrepancia en F1 entre entrenar con soporte nativo de NaN o con imputación por mediana queda contenida dentro del rango de la desviación típica.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Corrección metodológica planteada por el equipo: cuestionamos la aplicación homogénea de la imputación univariante sobre arquitecturas que admiten datos faltantes de manera intrínseca. Esta observación sirvió para diseñar un sub-experimento específico que evalúa el impacto de la imputación sobre ensambles frente a modelos de vectores de soporte y vecinos más cercanos.
+\end{iaanalisis}
+
+% ---------------------------------------------------------------------------------------------------
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+¿Es metodológicamente riguroso comparar un Random Forest que procesa NaN de forma nativa frente a modelos como SVM que exigen imputación previa? Además, añade una celda explicativa en el EDA detallando el comportamiento y la casuística de las presiones invertidas.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Claude Code (Claude Opus 5.5), CLI en Windows}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+La comparativa es metodológicamente válida siempre que compartan idénticas particiones de train/test y se evalúen con las mismas métricas sin filtración. No obstante, cambia el foco de la hipótesis:
+- Comparar modelos entre sí exige condiciones de preprocesamiento homogéneas (todos con imputación).
+- Comparar Random Forest (con mediana) frente a Random Forest (nativo con NaN) aísla el impacto de la técnica de imputación.
+
+En el EDA se añadieron dos bloques que documentan la presencia de los 44 casos invertidos, los 4 registros bajo el umbral vital y el caso singular que compartía ambas anomalías, justificando la secuencia requerida en la limpieza.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se aceptó la puntualización teórica. Se acordó mantener la imputación homogénea como base para el contraste inter-modelo, reservando la variante sin imputación como un análisis ablación específico sobre el ensamble para responder al apartado 3.1 del enunciado.
+\end{iaanalisis}
+
+% ---------------------------------------------------------------------------------------------------
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Define formalmente los objetivos del notebook de preprocesamiento: evaluar el impacto relativo de las técnicas de limpieza bajo un esquema de regularización base y analizar experimentalmente si la imputación explícita aporta ventaja en ensambles frente a su manejo nativo.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Claude Code (Claude Opus 5.5), CLI en Windows}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+- Se formalizaron ambos objetivos al inicio del cuaderno.
+- Se parametrizó construir_pipeline(imputar=True/False) para desplegar en paralelo la variante "Random Forest (NaN)".
+- Se añadió una aserción de control verificando scikit-learn >= 1.4.
+- Se implementó el cálculo de diferencias pareadas (Delta = F1_nativo - F1_imputado) sobre idénticos pliegues.
+Resultado cuantitativo: el Delta medio se sitúa cercano a 0 con una desviación que absorbe la diferencia, concluyendo que la imputación simple no degrada ni beneficia de forma crítica al ensamble.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se validó la estructura de evaluación comparativa por pares. El análisis confirma empíricamente que la imputación por mediana constituye un procedimiento neutro y seguro que permite alimentar de forma equitativa tanto a los modelos lineales/paramétricos como a los algoritmos basados en árboles.
+\end{iaanalisis}
+
+% ---------------------------------------------------------------------------------------------------
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Revisemos las advertencias sobre variables fisiológicas: las horas de descanso nocturno y la circunferencia de cintura registradas son clínicamente viables dentro de los rangos de la muestra. En cuanto a la frecuencia cardíaca, detalla la plausibilidad médica de los valores inferiores a 40 lpm antes de tomar cualquier decisión de filtrado. Además, implementa el redondeo a enteros en las magnitudes discretas pendientes.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Claude Code (Claude Opus 5.5), CLI en Windows}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Redondeo discreto: se estructuró la función redondear_enteros mediante el diccionario REDONDEO, aplicando casteo al entero más próximo sobre anos_fumador, frecuencia_cardiaca_reposo y consumo_alcohol_semanal. La variación en media y correlación con el target resultó insignificante (< 0,01).
+
+Frecuencia cardíaca en reposo < 40 lpm: representa bradicardia severa, pero no constituye necesariamente una imposibilidad médica (fisiología del deportista de fondo, bloqueo auriculoventricular o tratamiento concomitante con betabloqueantes). De los 10 registros identificados, solo 2 (25,8 y 26,6 lpm) presentan carácter dudoso extremo, mientras que los restantes (38--40 lpm) son clínicamente plausibles. Se adoptó el criterio de conservarlos al igual que las cotas de sueño y perímetro de cintura.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Criterio propio del equipo frente a la sugerencia inicial de la IA: la herramienta tendía a clasificar valores estadísticamente raros como errores que debían suprimirse. Defendimos que las horas de sueño reportadas y las medidas corporales reflejan la variabilidad poblacional real de la cohorte. En la frecuencia cardíaca, al representar menos del 0,5\% de los datos y existir justificación patológica plausible, se decidió mantener los registros para no comprometer la detección de perfiles críticos.
+\end{iaanalisis}
+
+% ---------------------------------------------------------------------------------------------------
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Documenta esa conclusión en el EDA. En cuanto a la edad, dado que el diccionario de variables especifica 'años cumplidos', el redondeo matemático no es el más adecuado; debe aplicarse un redondeo hacia abajo (función suelo / truncamiento entero) sobre la población adulta.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Claude Code (Claude Opus 5.5), CLI en Windows}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Variable edad: se corrigió el procedimiento aplicando np.floor tras el filtrado de menores de 18 años, ajustándose estrictamente a la definición de "años cumplidos". La edad mínima de la muestra se consolida en 18 años exactos, no se generan anomalías en la relación edad-tabaquismo y la correlación con la variable objetivo permanece inalterada.
+
+EDA: se añadieron tres celdas analíticas documentando el espectro de bradicardia severa (< 40 lpm), justificando la no exclusión de los pacientes por plausibilidad fisiológica ambulatoria y escaso volumen relativo (< 0,5\%).
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Corrección conceptual directa a la herramienta: la IA aplicaba un redondeo estándar (\texttt{round}) que en una persona de 17,9 años habría asignado artificialmente 18 años. Se impuso el uso de \texttt{np.floor} para respetar la semántica médica de años cumplidos tras asegurar el criterio de inclusión de adultos.
+\end{iaanalisis}
+
+% ---------------------------------------------------------------------------------------------------
+\chapter*{Análisis crítico}
+
+\section*{Correcciones del equipo a la IA}
+
+\begin{itemize}
+    \item \textbf{Evaluación con métricas de dispersión:} La IA reportaba inicialmente medias aritméticas aisladas en la comparativa de preprocesamientos. Se exigió reportar media $\pm$ desviación típica, lo que evidenció que las variaciones menores de F1 se debían a la partición y no al preprocesamiento.
+    \item \textbf{Gestión de valores faltantes en árboles:} La herramienta forzaba imputación univariante universal sobre todos los modelos. El equipo introdujo la distinción técnica de los clasificadores modernos basados en árboles (Random Forest), generando un experimento comparativo específico.
+    \item \textbf{Preservación de la señal en transformaciones:} La IA eliminó transitoriamente el redondeo de días de actividad; se exigió su restitución y se amplió el tratamiento a las variables de naturaleza entera (\texttt{anos\_fumador}, \texttt{frecuencia\_cardiaca\_reposo} y \texttt{consumo\_alcohol\_semanal}).
+    \item \textbf{Semántica de la variable edad:} La IA propuso un redondeo simétrico; el equipo corrigió la operación a truncamiento inferior (\texttt{np.floor}) para honrar la definición clínica de «años cumplidos».
+    \item \textbf{Defensa de atípicos clínicos:} La herramienta catalogó valores extremos de sueño y cintura como candidatos a eliminación. El equipo rechazó la poda al verificar que son biológicamente admisibles.
+    \item \textbf{Precedencia lógica en la presión arterial:} Se detectó que el orden de enmascaramiento propuesto por la IA destruía la detección de la presión invertida al introducir un valor \texttt{NaN} previo; se obligó a anteponer la regla cruzada.
+\end{itemize}
 
 \end{document}
 
