@@ -3446,6 +3446,1184 @@ encoder_ordinal = OrdinalEncoder(
 Se acepta, pero simplificándolo en 2 líneas.
 \end{iaanalisis}
 
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+def metricas(y_real, y_pred, conjunto):
+    return {
+        f"{conjunto}_accuracy": accuracy_score(y_real, y_pred),
+        f"{conjunto}_f1_macro": f1_score(y_real, y_pred, average="macro"),
+        f"{conjunto}_recall_alto": recall_score(y_real, y_pred, labels=[2], average="macro"),
+    }
+
+def evaluar(pipeline, X, y, nombre_modelo, nombre_preprocesado, verbose=False):
+    X, y = datos.drop(columns=TARGET), datos[TARGET]
+    filas = []
+    if verbose:
+        print(f"Evaluando modelo {nombre_modelo} con preprocesado {nombre_preprocesado}...")
+    for iteracion, (train_idx, test_idx) in enumerate(splitter.split(X, y), start=1):
+        X_train_fold, X_test_fold = X.iloc[train_idx], X.iloc[test_idx]
+        y_train_fold, y_test_fold = y.iloc[train_idx], y.iloc[test_idx]
+        pipeline.fit(X_train_fold, y_train_fold)
+        for nombre_modelo, (modelo, escalar, imputar) in MODELOS.items():
+            pipeline = construir_pipeline(clone(modelo), escalar, imputar).fit(X_train, y_train)
+            fila = {"preprocesado": nombre, "modelo": nombre_modelo, "iteracion": iteracion,
+                    "n_train": len(y_train), "n_test": len(y_test),
+                    **metricas(y_train, pipeline.predict(X_train), "train"),
+                    **metricas(y_test, pipeline.predict(X_test), "test")}
+            filas.append(fila)
+            if verbose:
+                print(f"{nombre_modelo.upper()}: train F1 {fila['train_f1_macro']:.4f} | "
+                      f"test F1 {fila['test_f1_macro']:.4f} | test recall alto {fila['test_recall_alto']:.4f}")
+    return pd.DataFrame(filas)
+
+
+Como puedes ver, ahora se mete un pipeline individual en vez de ejecutar todos los modelos. Quiero que me me lo adaptes para ello 
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aquí tienes la función adaptada para recibir un único **pipeline individual** (y clonarlo en cada iteración de la validación cruzada para evitar fugas o sobreescrituras entre folds), corrigiendo también algunas variables globales del bucle original (`X_train`, `nombre`, etc.) para que apunten correctamente a cada fold (`_fold`):
+
+```python
+from sklearn.base import clone
+import pandas as pd
+
+def metricas(y_real, y_pred, conjunto):
+    return {
+        f"{conjunto}_accuracy": accuracy_score(y_real, y_pred),
+        f"{conjunto}_f1_macro": f1_score(y_real, y_pred, average="macro"),
+        f"{conjunto}_recall_alto": recall_score(y_real, y_pred, labels=[2], average="macro"),
+    }
+
+def evaluar(pipeline, X, y, nombre_modelo, nombre_preprocesado, verbose=False):
+    filas = []
+    
+    if verbose:
+        print(f"Evaluando modelo {nombre_modelo} con preprocesado {nombre_preprocesado}...")
+        
+    for iteracion, (train_idx, test_idx) in enumerate(splitter.split(X, y), start=1):
+        # Separar los datos de train y test para este fold
+        X_train_fold, X_test_fold = X.iloc[train_idx], X.iloc[test_idx]
+        y_train_fold, y_test_fold = y.iloc[train_idx], y.iloc[test_idx]
+        
+        # Clonar el pipeline para que empiece limpio en cada fold y ajustarlo
+        pipeline_fold = clone(pipeline)
+        pipeline_fold.fit(X_train_fold, y_train_fold)
+        
+        # Generar predicciones
+        y_pred_train = pipeline_fold.predict(X_train_fold)
+        y_pred_test = pipeline_fold.predict(X_test_fold)
+        
+        # Registrar métricas de la iteración
+        fila = {
+            "preprocesado": nombre_preprocesado,
+            "modelo": nombre_modelo, 
+            "iteracion": iteracion,
+            "n_train": len(y_train_fold), 
+            "n_test": len(y_test_fold),
+            **metricas(y_train_fold, y_pred_train, "train"),
+            **metricas(y_test_fold, y_pred_test, "test")
+        }
+        filas.append(fila)
+        
+        if verbose:
+            print(f"  - Iteración {iteracion} | train F1: {fila['train_f1_macro']:.4f} | "
+                  f"test F1: {fila['test_f1_macro']:.4f} | test recall alto: {fila['test_recall_alto']:.4f}")
+                  
+    return pd.DataFrame(filas)
+
+```
+
+### Cambios principales realizados:
+
+1. **Eliminación del bucle interno `MODELOS.items()**`: Ahora la función se centra en evaluar el pipeline específico que se le pasa como parámetro.
+2. **Uso de `clone(pipeline)**`: Es una buena práctica en scikit-learn al hacer validación cruzada manual para asegurar que cada fold entrena desde cero con un objeto fresco.
+3. **Corrección de nombres y variables**: Se cambió `nombre` por `nombre_preprocesado` y se aseguraron los tamaños y conjuntos con sufijo `_fold` (`X_train_fold`, `y_train_fold`, etc.) para evitar usar variables globales erróneas.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se busca elminar la iteración de modelos y mejorar la función. La respuesta de la IA es insuficiente, falta como mínimo incluir resultados visuales de las métricas. Sin embargo, ayuda a darme cuenta de que había eliminado el \textit{clone} de mi compañero.
+\end{iaanalisis}
+
+
+
+\begin{iaprompt}
+pero imprime los valores de las metricas
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aquí tienes la función adaptada para recibir un único **pipeline individual** (y clonarlo en cada iteración de la validación cruzada para evitar fugas o sobreescrituras entre folds), corrigiendo también algunas variables globales del bucle original (`X_train`, `nombre`, etc.) para que apunten correctamente a cada fold (`_fold`):
+
+```python
+from sklearn.base import clone
+import pandas as pd
+
+def metricas(y_real, y_pred, conjunto):
+    return {
+        f"{conjunto}_accuracy": accuracy_score(y_real, y_pred),
+        f"{conjunto}_f1_macro": f1_score(y_real, y_pred, average="macro"),
+        f"{conjunto}_recall_alto": recall_score(y_real, y_pred, labels=[2], average="macro"),
+    }
+
+def evaluar(pipeline, X, y, nombre_modelo, nombre_preprocesado, verbose=False):
+    filas = []
+    
+    if verbose:
+        print(f"Evaluando modelo {nombre_modelo} con preprocesado {nombre_preprocesado}...")
+        
+    for iteracion, (train_idx, test_idx) in enumerate(splitter.split(X, y), start=1):
+        # Separar los datos de train y test para este fold
+        X_train_fold, X_test_fold = X.iloc[train_idx], X.iloc[test_idx]
+        y_train_fold, y_test_fold = y.iloc[train_idx], y.iloc[test_idx]
+        
+        # Clonar el pipeline para que empiece limpio en cada fold y ajustarlo
+        pipeline_fold = clone(pipeline)
+        pipeline_fold.fit(X_train_fold, y_train_fold)
+        
+        # Generar predicciones
+        y_pred_train = pipeline_fold.predict(X_train_fold)
+        y_pred_test = pipeline_fold.predict(X_test_fold)
+        
+        # Registrar métricas de la iteración
+        fila = {
+            "preprocesado": nombre_preprocesado,
+            "modelo": nombre_modelo, 
+            "iteracion": iteracion,
+            "n_train": len(y_train_fold), 
+            "n_test": len(y_test_fold),
+            **metricas(y_train_fold, y_pred_train, "train"),
+            **metricas(y_test_fold, y_pred_test, "test")
+        }
+        filas.append(fila)
+        
+        if verbose:
+            print(f"  - Iteración {iteracion} | train F1: {fila['train_f1_macro']:.4f} | "
+                  f"test F1: {fila['test_f1_macro']:.4f} | test recall alto: {fila['test_recall_alto']:.4f}")
+                  
+    return pd.DataFrame(filas)
+
+```
+
+### Cambios principales realizados:
+
+1. **Eliminación del bucle interno `MODELOS.items()**`: Ahora la función se centra en evaluar el pipeline específico que se le pasa como parámetro.
+2. **Uso de `clone(pipeline)**`: Es una buena práctica en scikit-learn al hacer validación cruzada manual para asegurar que cada fold entrena desde cero con un objeto fresco.
+3. **Corrección de nombres y variables**: Se cambió `nombre` por `nombre_preprocesado` y se aseguraron los tamaños y conjuntos con sufijo `_fold` (`X_train_fold`, `y_train_fold`, etc.) para evitar usar variables globales erróneas.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+El código sirve como base, pero hay que hacerle retoques como eliminar valores innecesarios para el dataframe que devuelve y aún queda un resumen global con las desviaciones.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+def evaluar(pipeline, X, y, nombre_modelo, nombre_preprocesado, verbose=False):
+    X, y = datos.drop(columns=TARGET), datos[TARGET]
+    filas = []
+    if verbose:
+        print(f"Evaluando modelo {nombre_modelo} con preprocesado {nombre_preprocesado}...")
+    for iteracion, (train_idx, test_idx) in enumerate(splitter.split(X, y), start=1):
+        X_train_fold, X_test_fold = X.iloc[train_idx], X.iloc[test_idx]
+        y_train_fold, y_test_fold = y.iloc[train_idx], y.iloc[test_idx]
+        pipeline_fold = clone(pipeline)
+        pipeline.fit(X_train_fold, y_train_fold)
+        y_pred_train = pipeline.predict(X_train_fold)
+        y_pred_test = pipeline.predict(X_test_fold)
+        filas.append({
+            "preprocesado": nombre_preprocesado,
+            "modelo": nombre_modelo, 
+            "iteracion": iteracion,
+            **metricas(y_train_fold, y_pred_train, "train"),
+            **metricas(y_test_fold, y_pred_test, "test")
+        })
+        if verbose:
+            print(f"\n--- Iteración {iteracion} ---")
+            print(f"  [TRAIN] F1 Macro: {fila['train_f1_macro']:.4f} | Recall Alto: {fila['train_recall_alto']:.4f} | Accuracy: {fila['train_accuracy']:.4f}")
+            print(f"  [TEST]  F1 Macro: {fila['test_f1_macro']:.4f}  | Recall Alto: {fila['test_recall_alto']:.4f} | Accuracy: {fila['test_accuracy']:.4f}")
+    return pd.DataFrame(filas)
+
+
+Incluye un print con un resumen global con el +- de la desviación 
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aquí tienes la función con el resumen global al finalizar el bucle. Calcula la **media** y la **desviación típica (std)** de todas las métricas obtenidas en los folds y las imprime con formato `media ± std`:
+
+```python
+from sklearn.base import clone
+import pandas as pd
+
+def metricas(y_real, y_pred, conjunto):
+    return {
+        f"{conjunto}_accuracy": accuracy_score(y_real, y_pred),
+        f"{conjunto}_f1_macro": f1_score(y_real, y_pred, average="macro"),
+        f"{conjunto}_recall_alto": recall_score(y_real, y_pred, labels=[2], average="macro"),
+    }
+
+def evaluar(pipeline, X, y, nombre_modelo, nombre_preprocesado, verbose=False):
+    # Nota: si X e y ya se pasan como argumentos, reasignarlos desde una variable global 'datos' 
+    # podría sobreescribirlos, pero mantenemos tu lógica si así lo requieres:
+    X, y = datos.drop(columns=TARGET), datos[TARGET]
+    filas = []
+    
+    if verbose:
+        print(f"Evaluando modelo {nombre_modelo} con preprocesado {nombre_preprocesado}...")
+        
+    for iteracion, (train_idx, test_idx) in enumerate(splitter.split(X, y), start=1):
+        X_train_fold, X_test_fold = X.iloc[train_idx], X.iloc[test_idx]
+        y_train_fold, y_test_fold = y.iloc[train_idx], y.iloc[test_idx]
+        
+        # Ojo: estabas clonando en 'pipeline_fold' pero luego ajustando y prediciendo con 'pipeline'.
+        # Lo correcto es usar 'pipeline_fold' en todo este bloque:
+        pipeline_fold = clone(pipeline)
+        pipeline_fold.fit(X_train_fold, y_train_fold)
+        
+        y_pred_train = pipeline_fold.predict(X_train_fold)
+        y_pred_test = pipeline_fold.predict(X_test_fold)
+        
+        fila = {
+            "preprocesado": nombre_preprocesado,
+            "modelo": nombre_modelo, 
+            "iteracion": iteracion,
+            **metricas(y_train_fold, y_pred_train, "train"),
+            **metricas(y_test_fold, y_pred_test, "test")
+        }
+        filas.append(fila)
+        
+        if verbose:
+            print(f"\n--- Iteración {iteracion} ---")
+            print(f"  [TRAIN] F1 Macro: {fila['train_f1_macro']:.4f} | Recall Alto: {fila['train_recall_alto']:.4f} | Accuracy: {fila['train_accuracy']:.4f}")
+            print(f"  [TEST]  F1 Macro: {fila['test_f1_macro']:.4f}  | Recall Alto: {fila['test_recall_alto']:.4f}  | Accuracy: {fila['test_accuracy']:.4f}")
+            
+    df_resultados = pd.DataFrame(filas)
+    
+    # Resumen global con media y desviación típica si verbose es True
+    if verbose:
+        print("\n" + "="*50)
+        print(f"RESUMEN GLOBAL ({nombre_modelo} + {nombre_preprocesado})")
+        print("="*50)
+        
+        columnas_metricas = [c for c in df_resultados.columns if c not in ["preprocesado", "modelo", "iteracion"]]
+        
+        for col in columnas_metricas:
+            media = df_resultados[col].mean()
+            std = df_resultados[col].std()
+            print(f"  {col.upper():<22}: {media:.4f} ± {std:.4f}")
+        print("="*50)
+        
+    return df_resultados
+
+```
+
+### Corrección menor añadida:
+
+En tu fragmento original hacías `pipeline_fold = clone(pipeline)` pero luego usabas `pipeline.fit(...)` y `pipeline.predict(...)`. Lo he corregido para usar **`pipeline_fold`** en todo el bucle, garantizando que cada fold se entrene de forma independiente y limpia.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+No devuelve los valores correctos, debería devolver el resumen global con las desviaciones típicas, no por iteraciones. Sin embargo, ayuda a detectar un problema con el pipeline, ya que no se usaba el clonado.
+\end{iaanalisis}
+
+
+
+\begin{iaprompt}
+No deberías de devolver en df\_resultados los resultados globales con sus desviaciones en vez de separado por iteraciones?
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Tienes toda la razón. Si el propósito principal de evaluar con validación cruzada es obtener una estimación robusta y única del rendimiento del modelo, lo ideal es que `df_resultados` devuelva una **fila resumen por modelo/preprocesamiento con las medias y desviaciones típicas**, en lugar de tener las filas desglosadas por cada iteración.
+
+Aquí tienes la función adaptada para que devuelva un DataFrame con una sola fila consolidada (o tantas como combinaciones ejecutes) mostrando las métricas en formato **Media ± Desviación Típica**, manteniendo el desglose opcional solo para cuando quieras imprimirlo:
+
+```python
+from sklearn.base import clone
+import pandas as pd
+import numpy as np
+
+def metricas(y_real, y_pred, conjunto):
+    return {
+        f"{conjunto}_accuracy": accuracy_score(y_real, y_pred),
+        f"{conjunto}_f1_macro": f1_score(y_real, y_pred, average="macro"),
+        f"{conjunto}_recall_alto": recall_score(y_real, y_pred, labels=[2], average="macro"),
+    }
+
+def evaluar(pipeline, X, y, nombre_modelo, nombre_preprocesado, verbose=False):
+    X, y = datos.drop(columns=TARGET), datos[TARGET]
+    filas = []
+    
+    if verbose:
+        print(f"Evaluando modelo {nombre_modelo} con preprocesado {nombre_preprocesado}...")
+        
+    for iteracion, (train_idx, test_idx) in enumerate(splitter.split(X, y), start=1):
+        X_train_fold, X_test_fold = X.iloc[train_idx], X.iloc[test_idx]
+        y_train_fold, y_test_fold = y.iloc[train_idx], y.iloc[test_idx]
+        
+        pipeline_fold = clone(pipeline)
+        pipeline_fold.fit(X_train_fold, y_train_fold)
+        
+        y_pred_train = pipeline_fold.predict(X_train_fold)
+        y_pred_test = pipeline_fold.predict(X_test_fold)
+        
+        fila = {
+            "preprocesado": nombre_preprocesado,
+            "modelo": nombre_modelo, 
+            "iteracion": iteracion,
+            **metricas(y_train_fold, y_pred_train, "train"),
+            **metricas(y_test_fold, y_pred_test, "test")
+        }
+        filas.append(fila)
+        
+        if verbose:
+            print(f"\n--- Iteración {iteracion} ---")
+            print(f"  [TRAIN] F1 Macro: {fila['train_f1_macro']:.4f} | Recall Alto: {fila['train_recall_alto']:.4f} | Accuracy: {fila['train_accuracy']:.4f}")
+            print(f"  [TEST]  F1 Macro: {fila['test_f1_macro']:.4f}  | Recall Alto: {fila['test_recall_alto']:.4f}  | Accuracy: {fila['test_accuracy']:.4f}")
+            
+    df_iteraciones = pd.DataFrame(filas)
+    
+    # Construir el DataFrame resumen con la media y desviación típica
+    columnas_metricas = [c for c in df_iteraciones.columns if c not in ["preprocesado", "modelo", "iteracion"]]
+    
+    resumen_dict = {
+        "preprocesado": nombre_preprocesado,
+        "modelo": nombre_modelo
+    }
+    
+    for col in columnas_metricas:
+        media = df_iteraciones[col].mean()
+        std = df_iteraciones[col].std()
+        # Opcional: guardarlo como string formateado "media ± std" para visualización directa
+        resumen_dict[col] = f"{media:.4f} ± {std:.4f}"
+        
+        # Si prefieres conservar los valores numéricos separados para futuras operaciones matemáticas,
+        # puedes descomentar las siguientes líneas en lugar del string:
+        # resumen_dict[f"{col}_mean"] = media
+        # resumen_dict[f"{col}_std"] = std
+
+    df_resumen = pd.DataFrame([resumen_dict])
+    
+    if verbose:
+        print("\n" + "="*50)
+        print(f"RESUMEN GLOBAL ({nombre_modelo} + {nombre_preprocesado})")
+        print("="*50)
+        for col in columnas_metricas:
+            print(f"  {col.upper():<22}: {resumen_dict[col]}")
+        print("="*50)
+        
+    return df_resumen
+
+```
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se acepta la respuesta para adaptarla al código, cambiando algunos aspectos como el orden de impresión de las métricas. En cuanto a su segunda opción, se prefiere la primera porque es más cómoda para mostrar visualmente. También se determina con esta respuesta que no hace falta guardar ya en filas la iteración. 
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+no me gusta que se imprima primero train y despues test, debería imprimirse f1 train y despues test, etc.
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aquí tienes la función ajustada para que el orden de impresión agrupe primero la métrica (por ejemplo, **F1 Macro** con su valor de *train* y luego *test*), en lugar de agrupar por conjunto:
+
+```python
+from sklearn.base import clone
+import pandas as pd
+import numpy as np
+
+def metricas(y_real, y_pred, conjunto):
+    return {
+        f"{conjunto}_accuracy": accuracy_score(y_real, y_pred),
+        f"{conjunto}_f1_macro": f1_score(y_real, y_pred, average="macro"),
+        f"{conjunto}_recall_alto": recall_score(y_real, y_pred, labels=[2], average="macro"),
+    }
+
+def evaluar(pipeline, X, y, nombre_modelo, nombre_preprocesado, verbose=False):
+    X, y = datos.drop(columns=TARGET), datos[TARGET]
+    
+    metricas_folds = {
+        "train_accuracy": [], "train_f1_macro": [], "train_recall_alto": [],
+        "test_accuracy": [], "test_f1_macro": [], "test_recall_alto": []
+    }
+    
+    if verbose:
+        print(f"Evaluando modelo {nombre_modelo} con preprocesado {nombre_preprocesado}...")
+        
+    for iteracion, (train_idx, test_idx) in enumerate(splitter.split(X, y), start=1):
+        X_train_fold, X_test_fold = X.iloc[train_idx], X.iloc[test_idx]
+        y_train_fold, y_test_fold = y.iloc[train_idx], y.iloc[test_idx]
+        
+        pipeline_fold = clone(pipeline)
+        pipeline_fold.fit(X_train_fold, y_train_fold)
+        
+        y_pred_train = pipeline_fold.predict(X_train_fold)
+        y_pred_test = pipeline_fold.predict(X_test_fold)
+        
+        m_train = metricas(y_train_fold, y_pred_train, "train")
+        m_test = metricas(y_test_fold, y_pred_test, "test")
+        
+        for k, v in {**m_train, **m_test}.items():
+            metricas_folds[k].append(v)
+            
+        if verbose:
+            print(f"\n--- Iteración {iteracion} ---")
+            print(f"  F1 Macro   -> Train: {m_train['train_f1_macro']:.4f} | Test: {m_test['test_f1_macro']:.4f}")
+            print(f"  Recall Alto -> Train: {m_train['train_recall_alto']:.4f} | Test: {m_test['test_recall_alto']:.4f}")
+            print(f"  Accuracy   -> Train: {m_train['train_accuracy']:.4f} | Test: {m_test['test_accuracy']:.4f}")
+            
+    resumen_dict = {
+        "preprocesado": nombre_preprocesado,
+        "modelo": nombre_modelo
+    }
+    
+    for metrica, valores in metricas_folds.items():
+        media = np.mean(valores)
+        std = np.std(valores)
+        resumen_dict[metrica] = f"{media:.4f} ± {std:.4f}"
+
+    df_resumen = pd.DataFrame([resumen_dict])
+    
+    if verbose:
+        print("\n" + "="*50)
+        print(f"RESUMEN GLOBAL ({nombre_modelo} + {nombre_preprocesado})")
+        print("="*50)
+        print(f"  F1 MACRO   -> Train: {resumen_dict['train_f1_macro']} | Test: {resumen_dict['test_f1_macro']}")
+        print(f"  RECALL ALTO-> Train: {resumen_dict['train_recall_alto']} | Test: {resumen_dict['test_recall_alto']}")
+        print(f"  ACCURACY   -> Train: {resumen_dict['train_accuracy']} | Test: {resumen_dict['test_accuracy']}")
+        print("="*50)
+        
+    return df_resumen
+
+```
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Los cambios hacen el código mucho más simple e intuitivo. Se acepta para hacer los cambios con el que ya está en el notebook de preprocesamiento. Sin embargo, el orden al imprimir en pantalla sigue siendo diferente al que se pedía en la consulta.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+creo que en df\_resumen no los metes para que se impriman en dicho orden
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Tienes toda la razón. Como en `resumen_dict` las claves se añadían de forma plana, al imprimir iterando directamente sobre el diccionario o sus claves (`for metrica in metricas_folds.keys()`), el orden dependía de cómo se hubieran declarado las claves originalmente (que empezaban por todo `train_` y luego todo `test_`).
+
+Para solucionarlo y asegurarnos de que tanto en el resumen global de consola como en el orden de las columnas del DataFrame se respete exactamente el criterio de **agrupar por métrica** (primero F1 Macro, luego Recall Alto, etc., con su Train y Test juntos), podemos estructurarlo explícitamente así:
+
+```python
+from sklearn.base import clone
+import pandas as pd
+import numpy as np
+
+def metricas(y_real, y_pred, conjunto):
+    return {
+        f"{conjunto}_accuracy": accuracy_score(y_real, y_pred),
+        f"{conjunto}_f1_macro": f1_score(y_real, y_pred, average="macro"),
+        f"{conjunto}_recall_alto": recall_score(y_real, y_pred, labels=[2], average="macro"),
+    }
+
+def evaluar(pipeline, X, y, nombre_modelo, nombre_preprocesado, verbose=False):
+    X, y = datos.drop(columns=TARGET), datos[TARGET]
+    
+    metricas_folds = {
+        "train_accuracy": [], "train_f1_macro": [], "train_recall_alto": [],
+        "test_accuracy": [], "test_f1_macro": [], "test_recall_alto": []
+    }
+    
+    if verbose:
+        print(f"Evaluando modelo {nombre_modelo} con preprocesado {nombre_preprocesado}...")
+        
+    for iteracion, (train_idx, test_idx) in enumerate(splitter.split(X, y), start=1):
+        X_train_fold, X_test_fold = X.iloc[train_idx], X.iloc[test_idx]
+        y_train_fold, y_test_fold = y.iloc[train_idx], y.iloc[test_idx]
+        
+        pipeline_fold = clone(pipeline)
+        pipeline_fold.fit(X_train_fold, y_train_fold)
+        
+        y_pred_train = pipeline_fold.predict(X_train_fold)
+        y_pred_test = pipeline_fold.predict(X_test_fold)
+        
+        m_train = metricas(y_train_fold, y_pred_train, "train")
+        m_test = metricas(y_test_fold, y_pred_test, "test")
+        
+        for k, v in {**m_train, **m_test}.items():
+            metricas_folds[k].append(v)
+            
+        if verbose:
+            print(f"\n--- Iteración {iteracion} ---")
+            print(f"  F1 Macro   -> Train: {m_train['train_f1_macro']:.4f} | Test: {m_test['test_f1_macro']:.4f}")
+            print(f"  Recall Alto -> Train: {m_train['train_recall_alto']:.4f} | Test: {m_test['test_recall_alto']:.4f}")
+            print(f"  Accuracy   -> Train: {m_train['train_accuracy']:.4f} | Test: {m_test['test_accuracy']:.4f}")
+            
+    # Calcular medias y desviaciones
+    calculadas = {}
+    for metrica, valores in metricas_folds.items():
+        media = np.mean(valores)
+        std = np.std(valores, ddof=1)
+        calculadas[metrica] = f"{media:.4f} ± {std:.4f}"
+
+    # Construir el diccionario respetando el orden visual deseado (y ordenando las columnas del DF)
+    resumen_dict = {
+        "preprocesado": nombre_preprocesado,
+        "modelo": nombre_modelo,
+        "train_f1_macro": calculadas["train_f1_macro"],
+        "test_f1_macro": calculadas["test_f1_macro"],
+        "train_recall_alto": calculadas["train_recall_alto"],
+        "test_recall_alto": calculadas["test_recall_alto"],
+        "train_accuracy": calculadas["train_accuracy"],
+        "test_accuracy": calculadas["test_accuracy"],
+    }
+
+    df_resumen = pd.DataFrame([resumen_dict])
+    
+    if verbose:
+        print("\n" + "="*55)
+        print(f"RESUMEN GLOBAL ({nombre_modelo} + {nombre_preprocesado})")
+        print("="*55)
+        print(f"  F1 MACRO   -> Train: {resumen_dict['train_f1_macro']} | Test: {resumen_dict['test_f1_macro']}")
+        print(f"  RECALL ALTO-> Train: {resumen_dict['train_recall_alto']} | Test: {resumen_dict['test_recall_alto']}")
+        print(f"  ACCURACY   -> Train: {resumen_dict['train_accuracy']} | Test: {resumen_dict['test_accuracy']}")
+        print("="*55)
+        
+    return df_resumen
+
+```
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Eliminada la última problemática, se acepta el código.
+\end{iaanalisis}
+
+
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+se pueden concatenar pipelines o algo así? tipo:
+
+def construir_pipeline(modelo, escalar, imputar=True):
+    codificacion = ColumnTransformer(
+        [
+            ("nominales", OneHotEncoder(drop="first", handle_unknown="ignore"), NOMINALES),
+            ("ordinal", OrdinalEncoder(categories=[ORDEN_ACTIVIDAD]), [ORDINAL]),
+        ],
+        remainder="passthrough",
+    )
+    pasos = [("codificacion", codificacion)]
+    if imputar:
+        pasos.append(("imputacion", SimpleImputer(strategy="median")))
+    if escalar:
+        pasos.append(("escalado", StandardScaler()))
+    pasos.append(("modelo", modelo))
+    return Pipeline(pasos)
+
+En esta funcion lo de one-hot y ordinal en esas variables 100\% lo voy a usar siempre, entonces no me gustaría estar añadiéndolo a todos mis pipelines (voy a prescindir de esta función y posiblemente crearé otros pipelines con opciones diferentes a las que hay aquí).
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+¡Sí, totalmente! De hecho, **es la mejor forma de trabajar en scikit-learn** para no repetir código y mantener la limpieza mental en tus experimentos.
+
+Si la codificación (`OneHotEncoder` y `OrdinalEncoder`) y el tratamiento de booleanos o variables categóricas van a estar **siempre fijos**, puedes definir un **preprocesador base global** (o un minipipeline de codificación) una sola vez al principio del cuaderno, y luego **encadenarlo** o meterlo dentro de cualquier otro pipeline o función de experimentos que crees después.
+
+Tienes dos formas estupendas de hacerlo:
+
+### Opción 1: Definir un `ColumnTransformer` fijo y meterlo dentro de tus pipelines personalizados
+
+En lugar de reescribir la codificación cada vez, la guardas en una variable global (por ejemplo, `preprocesador_base`) y cuando quieras construir un experimento rápido, simplemente la encadenas al principio de los pasos:
+
+```python
+# 1. Esto lo defines UNA SOLA VEZ al principio del notebook y te olvidas
+preprocesador_base = ColumnTransformer(
+    transformers=[
+        ("nominales", OneHotEncoder(drop="first", handle_unknown="ignore"), NOMINALES),
+        ("ordinal", OrdinalEncoder(categories=[ORDEN_ACTIVIDAD]), [ORDINAL]),
+        # Si tienes booleanos u otras cosas fijas, los metes aquí también
+    ],
+    remainder="passthrough", # Deja pasar el resto de numéricas intactas
+)
+
+# 2. Cuando quieras hacer un experimento loco, simplemente concatenas el bloque base:
+pipeline_experimento_1 = Pipeline([
+    ("codificacion_fija", preprocesador_base),   # <-- Lo que usas siempre
+    ("imputacion", SimpleImputer(strategy="median")),
+    ("escalado", RobustScaler()),               # <-- Cambias StandardScaler por RobustScaler al vuelo
+    ("modelo", KNeighborsClassifier())          # <-- Cambias el modelo
+])
+
+pipeline_experimento_2 = Pipeline([
+    ("codificacion_fija", preprocesador_base),   # <-- Lo reutilizas sin escribirlo más
+    ("modelo", RandomForestClassifier())        # <-- O uno sin escalar ni imputar
+])
+
+```
+
+---
+
+### Opción 2: Anidar Pipelines (Un pipeline dentro de otro)
+
+Scikit-learn permite meter un `Pipeline` completo como un paso dentro de otro `Pipeline` (como si fuera una matrioshka). Esto es comodísimo si quieres agrupar toda la parte de transformación y luego pegarla a un modelo:
+
+```python
+# Tu bloque fijo de transformación de variables
+pipeline_transformacion = Pipeline([
+    ("codificacion", ColumnTransformer([
+        ("nominales", OneHotEncoder(drop="first", handle_unknown="ignore"), NOMINALES),
+        ("ordinal", OrdinalEncoder(categories=[ORDEN_ACTIVIDAD]), [ORDINAL])
+    ], remainder="passthrough")),
+    ("imputacion", SimpleImputer(strategy="median"))
+])
+
+# Ahora puedes "concatenarlo" con cualquier estimador o transformador extra de forma súper limpia:
+pipeline_final = Pipeline([
+    ("transformaciones_estandar", pipeline_transformacion), # El bloque fijo
+    ("escalador_extra", RobustScaler()),                     # Lo nuevo que quieras probar hoy
+    ("modelo", SVC())                                        # Tu modelo
+])
+
+```
+
+### ¿Por qué mola esto para experimentar?
+
+Te quitas la función rigurosa de en medio. Tu `preprocesador_base` o `pipeline_transformacion` actúa como unos **cimientos inamovibles**, y tú en cada celda de experimento solo tienes que escribir los 3 o 4 pasos específicos que cambian (el escalador, si metes PCA, o el modelo final), concatenándolos de forma natural con un simple `[("base", preprocesador_base), ("lo_nuevo", ...)]`.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+La consulta resuelve mi duda sobre cómo hacer los pipelines más libres y sobre cómo encadenarlos entre sí.
+\end{iaanalisis}
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+# Común a todos los pipelines de preprocesado
+pipeline_codificacion = Pipeline([
+    ("codificacion", ColumnTransformer([
+        ("nominales", OneHotEncoder(drop="first", handle_unknown="ignore"), NOMINALES),
+        ("ordinal", OrdinalEncoder(categories=[ORDEN_ACTIVIDAD]), [ORDINAL])
+    ], remainder="passthrough"))
+])
+
+# Preprocesado que imputa valores nulos con la mediana y escala los datos numéricos con escalado estándar
+pipeline_imputacionMediana_escaladoEstandar = Pipeline([
+    ("codificacion", pipeline_codificacion),
+    ("imputacion", SimpleImputer(strategy="median")),
+    ("escalado", StandardScaler())
+])
+
+Quiero hacer una prueba con logistic regression (con evaluación y todo). Cómo lo haría? Voy a usar DATOS["P3_pcr"]
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+¡Perfecto! Ya tienes la base modular montada de forma impecable. Como tu `pipeline_codificacion` y tus bloques intermedios son un `Pipeline` de scikit-learn, anidarlos es tan fácil como meterlos en la lista de pasos del pipeline final.
+
+Para hacer la prueba completa con **Logistic Regression** usando tu función `evaluar` y tus particiones (`splitter`), solo tienes que ejecutar esto en una celda de tu cuaderno:
+
+```python
+# 1. Montar el pipeline completo para Logistic Regression
+# (Usamos tu pipeline base y le añadimos imputación, escalado y el modelo)
+pipeline_lr_estandar = Pipeline([
+    ("preprocesado_base", pipeline_imputacionMediana_escaladoEstandar),
+    ("modelo", LogisticRegression(max_iter=1000, random_state=SEED))
+])
+
+# 2. Elegir el dataset que quieres probar (por ejemplo, P3_pcr)
+# Asegúrate de usar el DataFrame procesado correspondiente de tu diccionario DATOS
+df_experimento = DATOS["P3_pcr"] 
+
+# 3. Lanzar la evaluación con tu función genérica
+resultados_lr = evaluar(
+    pipeline=pipeline_lr_estandar, 
+    df_dataset=df_experimento, 
+    nombre_modelo="Logistic Regression", 
+    nombre_preprocesado="P3_pcr", 
+    verbose=True  # Ponlo a True para ver el detalle por iteración y el resumen global
+)
+
+# 4. Ver el DataFrame de resultados
+resultados_lr
+
+```
+
+### ¿Por qué te soluciona la vida esta estructura?
+
+Si mañana quieres probar **Logistic Regression con `RobustScaler**` en lugar de `StandardScaler`, no tienes que volver a escribir la codificación ni tocar nada de arriba; solo creas un pipeline nuevo al vuelo combinando las piezas:
+
+```python
+from sklearn.preprocessing import RobustScaler
+
+pipeline_lr_robust = Pipeline([
+    ("codificacion", pipeline_codificacion),
+    ("imputacion", SimpleImputer(strategy="median")),
+    ("escalado", RobustScaler()), # <-- Cambiado al vuelo
+    ("modelo", LogisticRegression(max_iter=1000, random_state=SEED))
+])
+
+# Y lo evalúas igual:
+resultados_robust = evaluar(pipeline_lr_robust, DATOS["P3_pcr"], "LogReg + Robust", "P3_pcr", verbose=True)
+
+```
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+La consulta resuelve la duda, aunque olvida la estructura de \textit{evaluar} (hay que pasarle X, y, no datos). Parece indicar que para realizar esto va a ser más sencillo realizar una función para añadir modelos a pipelines fácilmente.
+\end{iaanalisis}
+
+
+
+\begin{iaprompt}
+es que se podría crear una función que fuese que si se mete el grid como parametro se hace con grid y que si no se hace metiendo el modelo y ya
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+¡Sí, exacto! De hecho, se puede hacer una **sola función inteligente** que detecte automáticamente si le pasas un modelo normal o un `GridSearchCV`. Como en scikit-learn tanto los modelos como el `GridSearchCV` tienen los mismos métodos (`fit`, `predict`), puedes unificarlo todo sin romper nada.
+
+Aquí tienes cómo puedes definir esa función única:
+
+```python
+from sklearn.model_selection import GridSearchCV
+
+def evaluar_modelo_o_grid(pipeline_preprocesado, estimador_o_grid, df_dataset, nombre_modelo, nombre_preprocesado, param_grid=None, verbose=True):
+    """
+    Evalúa un modelo o un GridSearchCV utilizando un pipeline de preprocesado base.
+    Si se proporciona param_grid, envuelve automáticamente el estimador en un GridSearchCV.
+    """
+    # 1. Construir el pipeline completo base
+    pipeline_completo = Pipeline([
+        ("preprocesado", pipeline_preprocesado),
+        ("modelo", estimador_o_grid)
+    ])
+    
+    # 2. Si se pasa un param_grid, lo envolvemos en un GridSearchCV de forma automática
+    if param_grid is not None:
+        estimador_final = GridSearchCV(
+            estimator=pipeline_completo,
+            param_grid=param_grid,
+            cv=3,
+            scoring='f1_macro',
+            n_jobs=-1
+        )
+        nombre_modelo_final = f"{nombre_modelo} (Grid)"
+    else:
+        estimador_final = pipeline_completo
+        nombre_modelo_final = nombre_modelo
+
+    # 3. Llamar a tu función 'evaluar' de siempre
+    return evaluar(
+        pipeline=estimador_final, 
+        df_dataset=df_dataset, 
+        nombre_modelo=nombre_modelo_final, 
+        nombre_preprocesado=nombre_preprocesado, 
+        verbose=verbose
+    )
+
+```
+
+### ¿Cómo se usaría en tu cuaderno?
+
+De esta forma tan limpia, **la misma función sirve para las dos situaciones**:
+
+**Caso A: Sin Grid (un modelo directo y rápido)**
+
+```python
+resultado_simple = evaluar_modelo_o_grid(
+    pipeline_preprocesado=pipeline_imputacionMediana_escaladoEstandar,
+    estimador_o_grid=LogisticRegression(max_iter=1000, random_state=SEED),
+    df_dataset=DATOS["P3_pcr"],
+    nombre_modelo="Logistic Regression",
+    nombre_preprocesado="P3_pcr",
+    verbose=True
+)
+
+```
+
+**Caso B: Con Grid (buscando hiperparámetros)**
+
+```python
+resultado_grid = evaluar_modelo_o_grid(
+    pipeline_preprocesado=pipeline_imputacionMediana_escaladoEstandar,
+    estimador_o_grid=LogisticRegression(max_iter=1000, random_state=SEED),
+    df_dataset=DATOS["P3_pcr"],
+    nombre_modelo="Logistic Regression",
+    nombre_preprocesado="P3_pcr",
+    param_grid={'modelo__C': [0.01, 0.1, 1.0, 10.0], 'modelo__solver': ['lbfgs']}, # ¡Con solo rellenar esto, ya hace el grid!
+    verbose=True
+)
+
+```
+
+Así te ahorras tener funciones duplicadas o andar montando pipelines a mano cada vez que quieras afinar parámetros.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+La consulta sirve para confirmar que la idea de crear una función pra simplificar código y crear un pipeline directo para la función de evaluación es correcta, pero incluir la evaluación en la función parece simplificación excesiva y no ayuda a la legibilidad del código.
+\end{iaanalisis}
+
+
+
+
+
+\begin{iaprompt}
+no metas la función de evaluar, tipo la llamaremos desde fuera de la funcion
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+¡Ah, perfecto! Entendido al 100%. Te refieres a que la función única se encargue únicamente de **construir y empaquetar** (ya sea el pipeline plano o metiéndolo dentro del `GridSearchCV`), pero **sin llamar a `evaluar()` dentro**, de forma que la llamada a `evaluar()` la hagas tú explícitamente desde fuera como hasta ahora.
+
+Aquí tienes esa función de montaje inteligente:
+
+```python
+from sklearn.model_selection import GridSearchCV
+
+def construir_estimador(pipeline_preprocesado, estimador, param_grid=None):
+    """
+    Une el preprocesado y el modelo en un pipeline. 
+    Si se proporciona param_grid, lo envuelve automáticamente en un GridSearchCV.
+    """
+    pipeline_completo = Pipeline([
+        ("preprocesado", pipeline_preprocesado),
+        ("modelo", estimador)
+    ])
+    
+    if param_grid is not None:
+        return GridSearchCV(
+            estimator=pipeline_completo,
+            param_grid=param_grid,
+            cv=3,
+            scoring='f1_macro',
+            n_jobs=-1
+        )
+    
+    return pipeline_completo
+
+```
+
+---
+
+### ¿Cómo lo usas con tu función `evaluar()` desde fuera?
+
+Tanto si vas a probar un modelo simple como un grid, la llamas antes de pasarle el resultado a tu `evaluar()`:
+
+**1. Si es un modelo simple (sin grid):**
+
+```python
+# 1. Construyes el estimador con la función
+estimador_lr = construir_estimador(
+    pipeline_preprocesado=pipeline_imputacionMediana_escaladoEstandar,
+    estimador=LogisticRegression(max_iter=1000, random_state=SEED)
+)
+
+# 2. Se lo pasas a tu evaluar() de siempre desde fuera
+res_lr = evaluar(
+    pipeline=estimador_lr, 
+    df_dataset=DATOS["P3_pcr"], 
+    nombre_modelo="Logistic Regression", 
+    nombre_preprocesado="P3_pcr", 
+    verbose=True
+)
+
+```
+
+**2. Si lleva hiperparámetros (con grid):**
+
+```python
+# 1. Construyes el estimador pasando el param_grid
+grid_lr = construir_estimador(
+    pipeline_preprocesado=pipeline_imputacionMediana_escaladoEstandar,
+    estimador=LogisticRegression(max_iter=1000, random_state=SEED),
+    param_grid={'modelo__C': [0.01, 0.1, 1.0, 10.0], 'modelo__solver': ['lbfgs']}
+)
+
+# 2. Se lo pasas exactamente igual a tu evaluar() desde fuera
+res_grid = evaluar(
+    pipeline=grid_lr, 
+    df_dataset=DATOS["P3_pcr"], 
+    nombre_modelo="Logistic Regression (Grid)", 
+    nombre_preprocesado="P3_pcr", 
+    verbose=True
+)
+
+```
+
+De esta manera, `evaluar()` se queda completamente intacta y agnóstica, y tú tienes una fábrica súper limpia (`construir_estimador`) que decide por ti si empaquetarlo en un Grid o dejarlo como un pipeline normal.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+El código de la función es correcto, aunque ha puesto que el scoring sea f1 macro si hay grid, lo cual debería ser correcto para un problema de clasificación multiclase. Sin embargo, como no sabe el enunciado ni el contexto de la práctica, se le debería preguntar si los parámetros del grid son correctos.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+Por cierto, el problema es de medicina de detección de riesgo cardiovascular con 3 variables. Sabiendo esto, el grid supongo que sigue sienod correcto, no?
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+¡Sí, totalmente! De hecho, **usar `GridSearchCV` sigue siendo completamente correcto y muy recomendable**, independientemente de que el problema sea médico o de cualquier otro ámbito.
+
+Aquí te detallo por qué no hay ningún problema clínico ni metodológico en usarlo, y qué debes tener en cuenta:
+
+### 1. ¿Por qué el Grid es correcto en medicina?
+
+En problemas médicos (y más en la predicción de riesgo cardiovascular, donde te juegas que un falso negativo signifique no detectar a un paciente grave), afinar los hiperparámetros es clave para equilibrar métricas críticas como el **Recall de alto riesgo** o el **F1 macro** que estás usando.
+
+El `GridSearchCV` te permite buscar de forma sistemática si un modelo necesita más o menos regularización (por ejemplo, el parámetro `C` en Logistic Regression o `max_depth` en Random Forest) para no sobreajustar con los datos clínicos.
+
+### 2. El único peligro a vigilar (y cómo lo tienes resuelto)
+
+El único "pecado" capital al hacer un Grid en machine learning médico es **caer en fugas de información (*data leakage*)**: optimizar los hiperparámetros usando datos que luego van a parar al conjunto de test.
+
+Pero **en tu caso lo estás haciendo de forma impecable**:
+
+* Tu función `evaluar` hace la partición por folds (`splitter.split`).
+* El `GridSearchCV` se entrena y busca los mejores hiperparámetros **dentro de cada fold de entrenamiento**, utilizando su propia validación cruzada interna (`cv=3` dentro del Grid).
+* El test de cada fold se mantiene sagrado y nunca ve el proceso de optimización del Grid.
+
+### 3. Un pequeño detalle a tener en cuenta con `scoring`
+
+* Actualmente lo tienes en `scoring='f1_macro'`, lo cual está muy bien para balancear todas las clases por igual.
+* Si en algún momento ves que te interesa priorizar a toda costa la clase de alto riesgo por encima de las demás, podrías cambiarlo en el Grid a `scoring='recall_macro'` o incluso pasarle una métrica personalizada enfocada exclusivamente en esa clase crítica. Pero para empezar y comparar preprocesados, `f1_macro` es un estándar estupendo.
+
+¡Vas con la arquitectura perfecta para sacar adelante los experimentos de tu TFG o práctica médica con total rigor científico!
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se confirma que el uso de f1 macro para scoring es correcto y que no hay ningún parámetro incorrecto en el grid search dado el tipo de problema que se aborda en la práctica.
+\end{iaanalisis}
+
+
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Tengo esto:
+
+# Común a todos los pipelines de preprocesado
+pipeline_codificacion = Pipeline([
+    ("codificacion", ColumnTransformer([
+        ("nominales", OneHotEncoder(drop="first", handle_unknown="ignore"), NOMINALES),
+        ("ordinal", OrdinalEncoder(categories=[ORDEN_ACTIVIDAD]), ORDINAL)
+    ], remainder="passthrough"))
+])
+
+# Preprocesado que imputa valores nulos con la mediana/moda y escala los datos numéricos con escalado estándar
+pipeline_imputacion_escaladoEstandar = Pipeline([
+    ("codificacion", pipeline_codificacion),
+    ("imputacion", SimpleImputer(strategy="median")),
+    ("escalado", StandardScaler())
+])
+
+
+Entre mis variables hay booleanos, nominales a los que aplicar one-hot, nominales a los que aplicar ordinal y floats. No tengo nulos que no sean float. Crees que está bien esto?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Echando un vistazo a tu código y a cómo has definido los bloques, hay un detalle técnico muy importante que **debes corregir**, ya que tal como está ahora mismo provocará un error en scikit-learn.
+
+### El problema: ¿Qué pasa con los booleanos?
+
+En tu código actual estás pasando las variables nominales y las ordinales al `ColumnTransformer`, pero **no has incluido las variables booleanas (`BOOLEANOS`) en ningún sitio**.
+
+Al poner `remainder="passthrough"` en el `ColumnTransformer`, las columnas booleanas pasarán de largo sin romperse, pero el problema viene justo después: **el `SimpleImputer(strategy="median")` y el `StandardScaler()` se van a aplicar a todo lo que pase**.
+
+* La mediana no se puede calcular en columnas de tipo booleano (`True`/`False`).
+* El `StandardScaler` intentará restar la media y dividir por la desviación típica en columnas booleanas, convirtiéndolas en floats continuos (lo cual deforma el sentido original de un booleano).
+
+---
+
+### La solución: Tratar los booleanos explícitamente
+
+Los booleanos en scikit-learn se suelen tratar mejor convirtiéndolos a enteros (`0` y `1`) o pasándolos por un imputador simple de frecuencia si tienen nulos, o simplemente asegurándonos de que el `ColumnTransformer` los gestione bien.
+
+Lo más limpio y robusto para integrarlo en tu `pipeline_codificacion` es **añadir los booleanos al `ColumnTransformer` usando un `SimpleImputer(strategy="most_frequent")` o simplemente dejándolos pasar (`passthrough`) si estás 100% seguro de que no tienen nulos**.
+
+Dado que mencionaste que *«no tengo nulos que no sean float»* (lo que significa que tus booleanos y categóricas no tienen nulos), puedes añadirlos al `ColumnTransformer` indicando que pasen tal cual (`"passthrough"`):
+
+```python
+# Común a todos los pipelines de preprocesado
+pipeline_codificacion = Pipeline([
+    ("codificacion", ColumnTransformer([
+        ("nominales", OneHotEncoder(drop="first", handle_unknown="ignore"), NOMINALES),
+        ("ordinal", OrdinalEncoder(categories=[ORDEN_ACTIVIDAD]), ORDINAL),
+        ("booleanos", "passthrough", BOOLEANOS)  # <-- ¡Añadido aquí para que no sufran el escalador!
+    ], remainder="drop"))  # <-- Ojo: cambiado a "drop" por seguridad para que ninguna columna extraña pase por descuido
+])
+
+```
+
+> **Nota sobre el `remainder`:** Si cambias `remainder="passthrough"` a `remainder="drop"`, le estás diciendo al `ColumnTransformer` que *solo* procese y deje pasar las columnas que tú has declarado explícitamente (`NOMINALES`, `ORDINAL` y `BOOLEANOS`). Esto es genial porque **las numéricas (`NUMERICAS`) se quedan fuera de este primer bloque**, permitiendo que pasen intactas al siguiente paso del pipeline (la mediana y el escalador), que es exactamente lo que buscas.
+
+---
+
+### Cómo quedaría tu bloque completo y seguro:
+
+```python
+# 1. Codificación de categóricas y paso de booleanos
+pipeline_codificacion = Pipeline([
+    ("codificacion", ColumnTransformer([
+        ("nominales", OneHotEncoder(drop="first", handle_unknown="ignore"), NOMINALES),
+        ("ordinal", OrdinalEncoder(categories=[ORDEN_ACTIVIDAD]), ORDINAL),
+        ("booleanos", "passthrough", BOOLEANOS)
+    ], remainder="drop")) # Solo dejamos pasar lo que controlamos explícitamente
+])
+
+# 2. Pipeline final que coge lo anterior, imputa y escala SOLO las numéricas restantes
+pipeline_imputacion_escaladoEstandar = Pipeline([
+    ("codificacion", pipeline_codificacion),
+    ("imputacion", SimpleImputer(strategy="median")), # Actúa sobre las numéricas que salieron del transformer anterior
+    ("escalado", StandardScaler())                   # Escala también solo las numéricas
+])
+
+```
+
+Con este ajuste te aseguras de que el `StandardScaler` y la mediana no toquen ni las nominales codificadas, ni las ordinales, ni los booleanos, aplicando el escalado exclusivamente a tus variables cuantitativas/floats. ¡Así evitas sorpresas extrañas durante el entrenamiento de los modelos!
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Surge la duda sobre si se debería haber aplicado el scaler a todo o deberían haberse descartado alguna columna, como las nominales o las booleanas. La respuesta parece indicar que efectivamente es mejor descartar estas columnas del escalado, pero habría que asegurarse de que efectivamente funciona así incluso en modelos que necesitan escalado, como SVC. 
+\end{iaanalisis}
+
+
+
+\begin{iaprompt}
+pero estás seguro de que no debo aplicar scaler? piensa que hay modelos como SVC que son sensibles a que no estén escalados
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+¡Tienes toda la razón y haces muy bien en dudar! Me he explicado mal en el punto anterior.
+
+**Sí que hay que escalar las variables numéricas** (`StandardScaler`), y de hecho por eso lo tenías metido en tu `pipeline_imputacion_escaladoEstandar` (`("escalado", StandardScaler())`). Modelos como **SVC**, **KNN** o **Logistic Regression** *exigen* que las variables numéricas estén escaladas para funcionar bien; si no, las variables con números más grandes (como el colesterol o los triglicéridos) aplastarán por completo a las que tienen rangos pequeños (como el IMC o la edad).
+
+El matiz importante al que me refería no era quitar el escalador, sino **a qué columnas se le aplica**.
+
+### El problema de aplicar el escalador "a lo bruto"
+
+Si en un pipeline plano pones el `StandardScaler()` al final de todo (después del `ColumnTransformer`), el escalador intentará aplicarse a **absolutamente todo lo que le llegue**, incluyendo:
+
+1. Las columnas numéricas (¡perfecto, aquí sí debe ir!).
+2. Las columnas **booleanas** (que se convertirán en floats raros con medias y desviaciones típicas).
+3. Las columnas nominales que salieron del `OneHotEncoder` (que son columnas de ceros y unos; escalarlas arruina la lógica de la codificación binaria).
+
+### ¿Cómo se soluciona correctamente para que las numéricas se escalen y las demás no?
+
+La forma profesional y limpia en scikit-learn es aplicar el `ColumnTransformer` **dividiendo el trabajo**, de modo que el escalador y la mediana afecten *únicamente* a las variables numéricas (`NUMERICAS`), mientras que el resto va por su camino sin sufrir transformaciones matemáticas extrañas.
+
+Así es como estructurarías tus bloques para que **las numéricas se escalen sí o sí**, pero sin contaminar las demás:
+
+```python
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
+from sklearn.impute import SimpleImputer
+
+# 1. Bloque exclusivo para variables NUMÉRICAS (aquí sí entra la mediana y el escalado)
+pipeline_numericas = Pipeline([
+    ("imputacion", SimpleImputer(strategy="median")),
+    ("escalado", StandardScaler())  # <-- ¡Aquí está tu StandardScaler para SVC, KNN y Regresión Logística!
+])
+
+# 2. Pipeline global de preprocesamiento unificado
+pipeline_preprocesado_completo = Pipeline([
+    ("columnas", ColumnTransformer([
+        ("num", pipeline_numericas, NUMERICAS),                                   # Se imputan y se escalan
+        ("nominales", OneHotEncoder(drop="first", handle_unknown="ignore"), NOMINALES), # One-hot limpio
+        ("ordinal", OrdinalEncoder(categories=[ORDEN_ACTIVIDAD]), ORDINAL),         # Ordinal limpio
+        ("booleanos", "passthrough", BOOLEANOS)                                   # Booleanos intactos
+    ], remainder="drop"))
+])
+
+```
+
+### ¿Por qué esta estructura es perfecta para ti?
+
+* **Protege a SVC y KNN:** Las variables numéricas van perfectamente escaladas con `StandardScaler`.
+* **Protege a las categóricas y booleanas:** No les aplica la media ni la desviación típica a cosas que no son números continuos.
+* **Modularidad total:** Si mañana en tus experimentos quieres probar un `RobustScaler` en lugar de un `StandardScaler`, solo cambias esa línea en el `pipeline_numericas` sin romper nada del resto del código.
+
+¿Ves como así se respeta la necesidad del escalador para los modelos sensibles pero con control quirúrgico sobre cada tipo de columna?
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+La consulta busca confirmar si realmente se deberían descartar dichas columnas, lo cual parece lógico, lanzando una pregunta negativa hacia esta aplicación. Según la respuesta de la IA, destruir variables categóricas y booleanas convirtiéndolas en continuos rompe la lógica de la clasificación binaria, por lo que se acepta.
+\end{iaanalisis}
+
+
+
+
+
+
+
+\begin{iaprompt}
+Prefiero si los procesamientos nominales me los declaras aparte
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aquí tienes la estructura limpia y modular con los transformadores categóricos declarados por separado, incluyendo la imputación por moda (`most_frequent`) tanto para las variables nominales/ordinales como para los booleanos, tal como has pedido:
+
+```python
+# ==============================================================================
+# TRANSFORMADORES CATEGÓRICOS Y BOOLEANOS
+# ==============================================================================
+# Definimos los bloques de preprocesamiento para variables no numéricas de forma 
+# independiente. Se añade un SimpleImputer con la moda ('most_frequent') por seguridad 
+# ante posibles valores nulos, seguido de sus respectivas codificaciones.
+transformadores_categoricos = [
+    ("nominales", Pipeline([
+        ("imputer", SimpleImputer(strategy="most_frequent")),
+        ("ohe", OneHotEncoder(drop="first", handle_unknown="ignore"))
+    ]), NOMINALES),
+    
+    ("ordinal", Pipeline([
+        ("imputer", SimpleImputer(strategy="most_frequent")),
+        ("ord", OrdinalEncoder(categories=[ORDEN_ACTIVIDAD]))
+    ]), ORDINAL),
+    
+    ("booleanos", Pipeline([
+        ("imputer", SimpleImputer(strategy="most_frequent"))
+    ]), BOOLEANOS)
+]
+
+# ==============================================================================
+# PREPROCESADO GLOBAL (NUMÉRICOS + CATEGÓRICOS)
+# ==============================================================================
+# Este ColumnTransformer unifica todo: aplica imputación por mediana y escalado 
+# estándar (StandardScaler) exclusivamente a las variables numéricas, y le concatena 
+# todos los transformadores categóricos y booleanos definidos arriba.
+pipeline_imputacionMediana_escaladoEstandar = ColumnTransformer(
+    transformers=[
+        ("numericos", Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scaler", StandardScaler())
+        ]), NUMERICAS)
+    ] + transformadores_categoricos,
+    remainder="drop"  # Descartar cualquier columna que no esté explícitamente declarada
+)
+
+```
+
+### ¿Por qué te viene genial dejarlo así?
+
+1. **Independencia total:** Puedes reutilizar la lista `transformadores_categoricos` en cualquier otro preprocesado futuro sin tener que reescribir la codificación o la imputación por moda.
+2. **Protección contra fugas (*Data Leakage*):** Al meter la imputación dentro de los sub-pipelines del `ColumnTransformer`, la moda y la mediana se calcularán **únicamente con el conjunto de entrenamiento** de cada fold, manteniendo tu validación cruzada 100% rigurosa.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+La consulta busca que los preprocesamientos nominales se declaren aparte, lo cual es correcto con lo pedido. Sin embargo, incluye imputación de moda, lo cual es incorrecto porque no hay valores nulos pra estas variables, por lo que no es necesario.
+\end{iaanalisis}
 
 
 \end{document}
