@@ -34,7 +34,7 @@ Por lo tanto, antes de entrenar los modelos se debe realizar primero un análisi
 El objetivo es diseñar, entrenar y evaluar 5 algoritmos de clasificación (2 modelos base o lineales y 3 modelos avanzados de ensamble) optimizados mediante un esquema de validación cruzada y ajuste exhaustivo de hiperparámetros, identificando las métricas de rendimiento más críticas, y seleccionar el modelo final óptimo.
 
 \section{Materiales}
-El conjunto de datos \textit{enfermedad\_cardiovascular.csv} consta de 2254 filas (ejemplos) y 28 columnas (variables o atributos), siendo 27 variables predictoras y 1 la variable objetivo, que es el riesgo cardiovascular. Al contar con 3 categorías, se trata de un problema de clasificación multiclase, en el que se debe predecir una de las tres categorías, devolviendo el modelo una etiqueta de clase discreta en vez de un valor numérico continuo, por lo que no se trata de un problema de regresión. Todas las variables incluidas en el conjunto de datos aportan información relevante para evaluar el riesgo cardiovascular. En cuanto a los tipos de variables:
+El conjunto de datos \textit{enfermedad\_cardiovascular.csv} consta de 2254 filas (ejemplos) y 28 columnas (variables o atributos), siendo 27 variables predictoras y 1 la variable objetivo, que es el riesgo cardiovascular. Al contar con 3 categorías, se trata de un problema de clasificación multiclase, en el que se debe predecir una de las tres categorías, devolviendo el modelo una etiqueta de clase discreta en vez de un valor numérico continuo, por lo que no se trata de un problema de regresión. Todas las variables incluidas en el conjunto de datos aportan información relevante para evaluar el riesgo cardiovascular ni tampoco hay ejemplos duplicados a eliminar. En cuanto a los tipos de variables:
 
 \begin{itemize}
     \item \textbf{19 variables numéricas}, las cuales están todas en \textit{float}. Estas son \textit{edad}, \textit{presion\_sistolica}, \textit{presion\_diastolica}, \textit{colesterol\_total}, \textit{colesterol\_hdl}, \textit{colesterol\_ldl}, \textit{trigliceridos}, \textit{glucosa\_ayunas}, \textit{indice\_masa\_corporal}, \textit{frecuencia\_cardiaca\_reposo}, \textit{horas\_sueno\_diarias}, \textit{consumo\_alcohol\_semanal}, \textit{anos\_fumador}, \textit{proteina\_c\_reactiva}, \textit{acido\_urico}, \textit{clearance\_creatinina}, \textit{frecuencia\_ejercicio\_semanal}, \textit{perimetro\_cintura} y \textit{hemoglobina\_glicosilada}.
@@ -46,13 +46,15 @@ El conjunto de datos \textit{enfermedad\_cardiovascular.csv} consta de 2254 fila
     \item \textbf{La variable objetivo multiclase} \textit{riesgo\_cardiovascular}, que cuenta con con 3 categorías (0: Bajo riesgo, 1: Riesgo moderado, 2: Alto riesgo). Al proporcionarse en el conjunto de datos la variable objetivo, se trata de un aprendizaje supervisado.
 \end{itemize}
 
-En un primer análisis de los datos, comprobando el mínimo, el máximo, la media, la desviación, la mediana (valor en el 50\% de los datos) y los cuartiles del 25\% y 75\%, se encontraon varias anomalías.
+En un primer análisis de los datos, comprobando el mínimo, el máximo, la media, la desviación, la mediana (valor en el 50\% de los datos) y los cuartiles del 25\% y 75\%, se encontraron varias anomalías.
 
 % TODO: VER SI QUEDA HUECO PARA METER LA TABLA
 
 Primero, variables numéricas que deberían haber sido discretas según la descripción del dataset proporcionado para la práctica (\textit{edad}, \textit{frecuencia\_ejercicio\_semanal}, \textit{anos\_fumador}, \textit{frecuencia\_cardiaca\_reposo} y \textit{consumo\_alcohol\_semanal}) son numéricas continuas, presentando además valores decimales, lo que parece incoherente.
 
 Al analizar el valor mínimo en \textit{edad} (9.80), se revela que la base de datos contiene filas con menores (específicamente se detectaron 4 ejemplos). Estas filas no pertenecen a la población de estudio del problema, que son los adultos, por lo que son filas no válidas que deben ser eliminadas para evitar que el modelo aprenda patrones sesgados o distorsione el proceso de aprendizaje.
+
+En cuanto a los valores nulos, se encuentran 4 variables con valores missing (horas\_sueno\_diarias con un 7.99\% de valores missing, proteina\_c\_reactiva con 6.97\%, colesterol\_ldl con 5.99\% y glucosa\_ayunas con 4.97\%). A pesar de la presencia de estos nulos, se descarta la opción de eliminar las columnas afectadas porque no hay ninguna variable especialmente afectada por esta pérdida, puesto que están por debajo del 10\%, que es un umbral habitual para tomar ese tipo de decisiones.
 
 La detección de problemáticas más exhaustiva, la cual requirió contrastar la información e hipótesis con fuentes, consistió en la localización de valores físicos y biológicos clínicamente imposibles. En primer lugar, se identificaron 4 registros en \textit{colesterol\_hdl} y \textit{trigliceridos} con valores de cero o negativos, lo cual resulta fisiológicamente inviable, ya que estos valores no pueden ser nulos ni inferiores en el ámbito científico. En segundo lugar, se detectaron 177 casos con valores negativos en \textit{consumo\_alcohol\_semanal}, otra condición físicamente imposible.
 
@@ -67,9 +69,40 @@ En cuanto a valores que superan o que caen por debajo de un límite biológico c
 
     \item Hay un valor por debajo del 3\% en sangre en \textit{hemoblogina\_glicosilada} (su mínimo, 2.82).
 
-    \item Un valor por debajo de 60 mmHg en presión sistólica y 40 mmHg en presión diastólica se considera un error de registro, ya que aunque son valores científicamente posibles, únicamente se registran en situaciones como un shock severo o una parada cardiorrespiratoria inminente, lo que es impropio para un paciente estable al que se le quiere evaluar para una prevención del riesgo cardiovascular. Se encuentran 4 ejemplos afectados. Estos umbrales se sitúan de forma conservadora muy por debajo del límite de hipotensión (90/60 mmHg) para poder conservar los casos reales de presión baja, descartando únicamente las situaciones críticas anteriores.
+    \item Un valor por debajo de 60 mmHg en presión sistólica y 40 mmHg en presión diastólica se considera un error de registro, ya que aunque son valores científicamente posibles, únicamente se registran en situaciones como un shock severo o una parada cardiorrespiratoria inminente, lo que es impropio para un paciente estable al que se le quiere evaluar para una prevención del riesgo cardiovascular. Se encuentran 4 ejemplos afectados. Estos umbrales se sitúan de forma conservadora muy por debajo del límite de hipotensión (por debajo de los 90/60 mmHg, hay 148 casos), para poder conservar los casos reales de presión baja, descartando únicamente las situaciones críticas anteriores y manteniendo los casos de hipotensión.
  
 \end{itemize}
+
+Además de realizar comprobaciones de valores clínicamente imposibles, se deben realizar comprobaciones entre variables cruzadas, es decir, verificar si hay coherencia lógica entre dos o más variables de un mismo paciente. A continuación se muestran las encontradas:
+
+\begin{itemize}
+    \item Los 478 casos con discordancia aparente en el uso de antihipertensivos sin diagnóstico previo de hipertensión no se consideran un error de datos, ya que estos fármacos se utilizan en otros escenarios aparte del tratamiento de la hipertensión.
+
+    \item Hay 597 casos que, según criterios de diagnósticos oficiales, coinciden con una diabetes mellitus tipo 2 según criterios diagnósticos oficiales, pero que en el conjunto de datos no se han marcado.
+
+    \item Según criterios oficiales, un IMC superior a 35 $\text{kg/m}^2$ indica obesidad severa, lo cual resulta incompatible con un perímetro de cintura inferior a 70 cm (propio de personas muy delgadas). De forma inversa, también es clínicamente imposible registrar un bajo peso (IMC inferior a 18,5) acompañado de un perímetro de cintura superior a 110. Se encontraron 34 casos.
+
+   \item En los parámetros glucémicos, una hemoglobina glicosilada inferior al 5,5\% refleja un control glucémico normal en los últimos meses, lo cual resulta incoherente con una glucosa en ayunas superior a 180 mg/dL (hiperglucemia marcada). De forma inversa, una hemoglobina glicosilada superior al 9\% indica una hiperglucemia crónica mal controlada, lo que contradice un valor de glucosa en ayunas inferior a 80 mg/dL. Se encontró un caso incoherente.
+
+   \item Se encontraron 44 casos que incumplían que la presión sistólica jamás puede ser menor que la presión diastólica.
+
+\end{itemize}
+
+En cuanto a la clase 0, representa el 50\% de los casos del conjunto de datos, la clase 1 el 30\% y la clase 2 el 20\%. Aunque estos resultados indican un desbalanceo moderado, hay que tener en cuenta que la clase de mayor riesgo (2), que es la más crítica, está presentando menos de la mitad de observaciones que la clase baja (0), por lo que será necesario prestar especial atención a las métricas de evaluación esta clase minoritaria y valorar técnicas de balanceo durante el entrenamiento para evitar que el modelo sesgue sus predicciones hacia la clase 0.
+
+
+% TODO: VER SI METER LA MATRIZ DE CORRELACIÓN
+
+Al analizar la matriz de correlación de Spearman, se observa que las variables predictoras mantienen una relación moderada con la variable objetivo, lo cual indica que aportan información útil para predecir el riesgo cardiovascular sin que el problema dependa de una sola variable. Por un lado, las variables que más se asocian con un aumento del riesgo (correlación positiva) son el consumo de alcohol ($r = +0.39$), la proteína C reactiva ($r = +0.28$), la hemoglobina glicosilada ($r = +0.28$) y la glucosa ($r = +0.21$), lo que implica que a medida que suben estos valores, aumenta la probabilidad de tener un riesgo alto. Por otro lado, el ejercicio físico ($r = -0.21$) y el colesterol HDL ($r = -0.20$) presentan una correlación negativa, lo que indica que con valores más altos en estas variables, menor es el riesgo del paciente. En cuanto a la relación entre las variables predictoras, sus correlaciones son cercanas a cero. Esto demuestra que son independientes entre sí y que no existe redundancia, por lo que no es necesario eliminar columnas ni aplicar técnicas de reducción de dimensionalidad como PCA.
+
+No obstante, en condiciones clínicas habituales, existe una estrecha relación entre el colesterol total y otras tres variables del perfil lipídico, regidas por la fórmula de Friedewald: $\text{colesterol\_total} = \text{colesterol\_hdl} + \text{colesterol\_ldl} + \frac{\text{trigliceridos}}{5}$. Sin embargo, como se observó anteriormente, apenas existe correlación entre las variables predictivas, lo cual resulta incoherente dada su dependencia matemática. Por ello, se contrastó el valor registrado frente al valor teórico calculado, aplicando un margen de tolerancia del 15\%. El análisis reveló que el 57,76\% de los registros no se ajustan al valor esperado a pesar de estar expresados en las mismas unidades (mg/dL), lo que evidencia una grave inconsistencia o ruido en la captura de estos datos.
+
+% TODO: VER SI METER LAS DOS GRÁFICAS
+
+Al analizar las comorbilidades de forma gráfica, se comprobó que cuantos más problemas de salud o tratamientos acumulaba un paciente al mismo tiempo (medido a través de las variables binarias), mayor era su nivel de riesgo cardiovascular. La actividad física elevada y las dietas mediterránea o vegetariana reducen el riesgo cardiovascular, mientras que la dieta occidental y los antecedentes familiares disparan los casos de riesgo alto.
+
+La variable \textit{proteina\_c\_reactiva} representa la PCR ultrasensible, útil para identificar el riesgo cardiovascular conforme aumentan sus valores. No obstante, según la comunidad científica, los valores superiores a 10 mg/L suelen reflejar infecciones o procesos inflamatorios agudos que requieren repetir la prueba, un rango en el que se sitúan 10 casos de la muestra. Al observar los tramos de la PCR, se aprecia un punto crítico al superar 1 mg/L. En ese momento, los casos de riesgo alto se disparan del 0,18\% al 28,23\%. Sin embargo, esta proporción no continúa creciendo en los tramos superiores (3–10 mg/L o más de 10), lo que sugiere que, una vez cruzado el primer umbral, la PCR deja de ser un factor determinante para distinguir los niveles más graves de riesgo.
+
 
 
 
