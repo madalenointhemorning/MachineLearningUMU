@@ -25,7 +25,57 @@ Inteligencia Artificial, IEEE Open Journal, Formato de publicación, Plantilla L
 \end{IEEEkeywords}
 
 \section{Introducción}
-\IEEEPARSTART{E}{ste} documento sirve como plantilla de inicio para la preparación de artículos según las directrices de publicación a una sola columna de la serie de revistas \textit{IEEE Open Journal}.
+\IEEEPARSTART{L}{as} enfermedades cardiovasculares continúan siendo una de las mayores amenazas para la salud pública global y una de las principales causas de morbimortalidad a nivel mundial. El desarrollo de la práctica busca desarrollar modelos de \textit{Machine Learning} para la práctica médica cotidiana, realizando la clasificación preventiva de riesgo cardiovascular en tres categorías (riesgo bajo, medio o alto), desarrollando así un problema multiclase de clasificación. Para la práctica, se proporcionan 2254 registros de pacientes y 28 variables sociodemográficas, clínicas, analíticas y de estilo de vida en un fichero, dados por el equipo médico e investigador del Hospital Morales Meseguer.
+
+A pesar del potencial del desarrollo de estos modelos, el conjunto de datos presenta ruido instrumental, errores de adquisición, discordancias fisiológicas entre biomarcadores y un notable desbalanceo de clases. Entrenar modelos directamente con datos sin revisar hace que aprendan patrones falsos y fallen cuando finalmente se apliquen a pacientes reales.
+
+Por lo tanto, antes de entrenar los modelos se debe realizar primero un análisis exploratorio de los datos (EDA) para formular técnicas para reducir para reducir el ruido y las inconsistencias clínicas, corregir los errores de registro y equilibrar la distribución de las clases y decidir si conviene o no actuar sobre el desbalanceo de clases.
+
+El objetivo es diseñar, entrenar y evaluar 5 algoritmos de clasificación (2 modelos base o lineales y 3 modelos avanzados de ensamble) optimizados mediante un esquema de validación cruzada y ajuste exhaustivo de hiperparámetros, identificando las métricas de rendimiento más críticas, y seleccionar el modelo final óptimo.
+
+\section{Materiales}
+El conjunto de datos \textit{enfermedad\_cardiovascular.csv} consta de 2254 filas (ejemplos) y 28 columnas (variables o atributos), siendo 27 variables predictoras y 1 la variable objetivo, que es el riesgo cardiovascular. Al contar con 3 categorías, se trata de un problema de clasificación multiclase, en el que se debe predecir una de las tres categorías, devolviendo el modelo una etiqueta de clase discreta en vez de un valor numérico continuo, por lo que no se trata de un problema de regresión. Todas las variables incluidas en el conjunto de datos aportan información relevante para evaluar el riesgo cardiovascular. En cuanto a los tipos de variables:
+
+\begin{itemize}
+    \item \textbf{19 variables numéricas}, las cuales están todas en \textit{float}. Estas son \textit{edad}, \textit{presion\_sistolica}, \textit{presion\_diastolica}, \textit{colesterol\_total}, \textit{colesterol\_hdl}, \textit{colesterol\_ldl}, \textit{trigliceridos}, \textit{glucosa\_ayunas}, \textit{indice\_masa\_corporal}, \textit{frecuencia\_cardiaca\_reposo}, \textit{horas\_sueno\_diarias}, \textit{consumo\_alcohol\_semanal}, \textit{anos\_fumador}, \textit{proteina\_c\_reactiva}, \textit{acido\_urico}, \textit{clearance\_creatinina}, \textit{frecuencia\_ejercicio\_semanal}, \textit{perimetro\_cintura} y \textit{hemoglobina\_glicosilada}.
+    
+    \item \textbf{5 variables booleanas} codificadas en binario. Estas son \textit{fumador\_actual}, \textit{hipertension\_previa}, \textit{diabetes\_mellitus}, \textit{tratamiento\_estatinas} y \textit{uso\_antihipertensivos}.
+
+    \item \textbf{3 variables categóricas}. Estas son \textit{tipo\_alimentacion} (Mediterránea, Occidental, Vegetariana, Baja en carbohidratos), \textit{nivel\_actividad} (Sedentario, Ligeramente activo, Moderadamente activo, Muy activo) y \textit{antecedentes\_familiares\_tipo} (Ninguno, Materno, Paterno, Ambos).
+
+    \item \textbf{La variable objetivo multiclase} \textit{riesgo\_cardiovascular}, que cuenta con con 3 categorías (0: Bajo riesgo, 1: Riesgo moderado, 2: Alto riesgo). Al proporcionarse en el conjunto de datos la variable objetivo, se trata de un aprendizaje supervisado.
+\end{itemize}
+
+En un primer análisis de los datos, comprobando el mínimo, el máximo, la media, la desviación, la mediana (valor en el 50\% de los datos) y los cuartiles del 25\% y 75\%, se encontraon varias anomalías.
+
+% TODO: VER SI QUEDA HUECO PARA METER LA TABLA
+
+Primero, variables numéricas que deberían haber sido discretas según la descripción del dataset proporcionado para la práctica (\textit{edad}, \textit{frecuencia\_ejercicio\_semanal}, \textit{anos\_fumador}, \textit{frecuencia\_cardiaca\_reposo} y \textit{consumo\_alcohol\_semanal}) son numéricas continuas, presentando además valores decimales, lo que parece incoherente.
+
+Al analizar el valor mínimo en \textit{edad} (9.80), se revela que la base de datos contiene filas con menores (específicamente se detectaron 4 ejemplos). Estas filas no pertenecen a la población de estudio del problema, que son los adultos, por lo que son filas no válidas que deben ser eliminadas para evitar que el modelo aprenda patrones sesgados o distorsione el proceso de aprendizaje.
+
+La detección de problemáticas más exhaustiva, la cual requirió contrastar la información e hipótesis con fuentes, consistió en la localización de valores físicos y biológicos clínicamente imposibles. En primer lugar, se identificaron 4 registros en \textit{colesterol\_hdl} y \textit{trigliceridos} con valores de cero o negativos, lo cual resulta fisiológicamente inviable, ya que estos valores no pueden ser nulos ni inferiores en el ámbito científico. En segundo lugar, se detectaron 177 casos con valores negativos en \textit{consumo\_alcohol\_semanal}, otra condición físicamente imposible.
+
+En cuanto a valores que superan o que caen por debajo de un límite biológico clínicamente imposible, se encontraron las siguientes incoherencias en variables individuales:
+
+\begin{itemize}
+    \item Hay un caso que presenta un paciente que lleva más años fumando que edad. Por suerte, este caso coincide con un menor de edad, por lo que será descartado durante el preprocesamiento. 
+
+    \item Se encuentra en \textit{indice\_masa\_corporal} 19 valores por debajo de los 13 $\text{kg/m}^2$.
+
+    \item Los valores en la variable \textit{frecuencia\_ejercicio\_semanal} representan el número de días a la semana con actividad física moderada o intensa. Se encuentran 41 valores que superan los 7 días, lo que está fuera del rango lógico posible ([0, 7]).
+
+    \item Hay un valor por debajo del 3\% en sangre en \textit{hemoblogina\_glicosilada} (su mínimo, 2.82).
+
+    \item Un valor por debajo de 60 mmHg en presión sistólica y 40 mmHg en presión diastólica se considera un error de registro, ya que aunque son valores científicamente posibles, únicamente se registran en situaciones como un shock severo o una parada cardiorrespiratoria inminente, lo que es impropio para un paciente estable al que se le quiere evaluar para una prevención del riesgo cardiovascular. Se encuentran 4 ejemplos afectados. Estos umbrales se sitúan de forma conservadora muy por debajo del límite de hipotensión (90/60 mmHg) para poder conservar los casos reales de presión baja, descartando únicamente las situaciones críticas anteriores.
+ 
+\end{itemize}
+
+
+
+
+
+
 
 \section{Metodología}
 Describa aquí la metodología utilizada en su trabajo.
