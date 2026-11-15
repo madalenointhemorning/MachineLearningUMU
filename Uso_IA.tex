@@ -7348,7 +7348,107 @@ Se soluciona un error sencillo de alineación visual de los títulos de los pane
 \end{iaanalisis}
 
 
+% ------------------------------------------------------------------------------
 
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+aqui está la documentacion de la practica, echo de menos figuras para el eda, el notebook del eda está en repo/notebooks/ dime qué imágenes del eda podria poner y donde.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Claude Code (Claude Opus 5.5)}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+- Revisa las 7 figuras generadas en 'notebooks/01_eda.ipynb' y las cruza con los comentarios TODO del apartado 2 (Materiales) de la memoria.
+- Propone priorizar:
+  1. Matriz de correlación de Spearman: respalda la independencia de predictoras y la falta de correlación de colesterol_total con las fracciones lipídicas.
+  2. Gráficas de comorbilidades y estilo de vida: combinadas en una sola figura para ilustrar la prevalencia por clase.
+  3. Boxplots por clase de las 8 variables más correlacionadas: ilustra tendencias clínicas y evidencia los valores fisiológicamente imposibles.
+- Desaconseja incluir la distribución del target (el texto ya aporta los porcentajes) y los boxplots generales de outliers para ahorrar espacio y respetar el límite de páginas.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+La asistencia de la IA fue útil para realizar un filtrado inicial de las visualizaciones del análisis exploratorio, evitando duplicar información ya descrita en las tablas y seleccionando únicamente aquellas figuras que aportan valor probatorio a las decisiones de limpieza posteriores.
+\end{iaanalisis}
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+genera esas imagenes sacandolas del notebook (NO TOQUES EL NOTEBOOK SIMPLEMENTE COPIA ESAS IMAGENES) y dejamelas en una carpeta aqui para subirlas en overleaf y me dices en que parrafo las pongo
+\end{Verbatim}
+\end{iaprompt}
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+metelas en la documentacion asi las veo perfectamente para cuando las meta en overleaf
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Claude Code (Claude Opus 5.5)}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+- Extrae directamente de las salidas de la celda 13 de '01_eda.ipynb' los ficheros PNG ('eda_spearman.png', 'eda_comorbilidades.png', 'eda_estilo_vida.png', 'eda_boxplots_top8.png') guardándolos en 'pruebas/docunuevo/figuras_eda/' sin modificar el notebook.
+- Inserta en la memoria técnica los entornos figure de LaTeX correspondientes, sustituyendo los comentarios TODO y enlazando las referencias cruzadas (\ref{}) en los párrafos de correlación, fórmula de Friedewald y comorbilidades.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se supervisó estrictamente que la herramienta no alterara el cuaderno de trabajo original, asegurando que la extracción de recursos fuera puramente de lectura para preservar la reproducibilidad del pipeline analítico.
+\end{iaanalisis}
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+mira los dos notebooks y rellename la bibliografia de la documentacion de esta carpeta de trabajo con todo lo que utilizamos para justificar el eda, el preprocesamiento, las metricas, la seleccion de modelos y demas
+
+[Mensaje enviado durante la tarea]: y no compiles solo escribelas
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Claude Code (Claude Opus 5.5)}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+- Inspecciona '01_eda.ipynb' y '02_preprocesamiento_y_modelado.ipynb' y localiza las referencias explícitas (NHLBI, MedlinePlus, Surviving Sepsis Campaign) y las implícitas sin citar (guías ADA 2024 para diabetes, criterios OMS 2000 para IMC, umbral de PCR de Pearson 2003, ecuación de Friedewald 1972, varianza casi nula de Kuhn & Johnson 2013).
+- Genera el fichero 'referencias.bib' con 30 entradas bibliográficas (fuentes clínicas, algoritmos, librerías y apuntes de la asignatura) e inserta las llamadas \cite{} en los párrafos pertinentes de la memoria.
+- Detecta y corrige un fallo en su script inicial de inserción que omitía caracteres de escape en las barras invertidas.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+El equipo comprobó que la IA reconstruyó adecuadamente el corpus bibliográfico correspondiente a los consensos médicos y fundamentos matemáticos del proyecto. No obstante, al generar entradas bibliográficas de memoria existía riesgo de alucinación en nombres de revistas, años o identificadores DOI, por lo que se requirió una verificación exhaustiva contra fuentes web indexadas.
+\end{iaanalisis}
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+verifica las referencias que elegiste de memoria buscandolas en internet
+
+[Mensaje enviado durante la tarea]: luego dime como lo meto a overleaf las referencias y despues te pasare el documento entero para que puedas relacionar el texto con ellas sin cambiar nada dejandolo verbatim a como estaba
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Claude Code (Claude Opus 5.5)}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+- Utiliza la herramienta WebSearch para auditar una a una las 30 entradas generadas de memoria, verificando autores, volumen, páginas y DOIs.
+- Corrige dos errores detectados en el archivo BibTeX:
+  1. Orden de autores en Multi-class AdaBoost (SAMME): la IA había listado a Hastie en primer lugar, siendo el orden real Zhu, Zou, Rosset y Hastie (2009).
+  2. Paginación del artículo de Kaufman et al. (2012) sobre data leakage, sustituyendo un rango erróneo por 'Art. no. 15'.
+- Incorpora DOIs validados en las fuentes principales (ADA, Pearson, Kaufman, Zhu) y proporciona las instrucciones para enlazar el archivo .bib en Overleaf.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+La exigencia de contraste contra internet evidenció la tendencia de los modelos de lenguaje a inventar o permutar metadatos bibliográficos secundarios (como el orden de coautores o la numeración interna de artículos digitales). La verificación forzada subsanó estas alucinaciones antes de incorporar la bibliografía a la memoria técnica definitiva.
+\end{iaanalisis}
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+vamos a mejorar las imagenes de lo del eda, porque la letra es SUPERPEQUEÑA y los numeros apenas se ven de lo pequeños que son y del poco grosor de su tipografia, hay que mejorar estas imagenes para que se vean mejor
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Claude Code (Claude Opus 5.5)}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+- Crea el script 'generar_figuras_eda.py' para redibujar las cuatro figuras del EDA directamente desde el dataset original a 300 ppp y al ancho de columna real (7,1 pulgadas).
+- Aplica tipografía escalada (8-10 pt), texto en negrita y nombres de variables abreviados para maximizar la legibilidad.
+- Mejoras visuales añadidas: matriz de Spearman sin ceros iniciales (.39) con resalte del target; comorbilidades en barras agrupadas por porcentaje en vez de apiladas; ordenación lógica de variables de estilo de vida y paleta uniforme de azules por clase.
+- Actualiza el ancho de las figuras en la memoria a \textwidth para evitar márgenes descompensados.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+El equipo identificó una limitación importante de formato: las gráficas generadas originalmente en el notebook interactivo se visualizaban de forma correcta en pantalla, pero al integrarlas escaladas en un documento PDF de dos columnas resultaban prácticamente ilegibles debido a fuentes diminutas y líneas de trazo excesivamente fino. Con la restricción estricta de no superar las 15 páginas impuesta por el profesorado, no era viable agrandar arbitrariamente las imágenes ocupando páginas completas. La solución consistió en programar un script específico ('generar_figuras_eda.py') que rediseñó las figuras al ancho exacto de página (7,1 pulgadas), optimizando el grosor tipográfico y la densidad de información sin consumir espacio adicional de la memoria.
+\end{iaanalisis}
 
 
 
