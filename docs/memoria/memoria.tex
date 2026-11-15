@@ -1,0 +1,473 @@
+\documentclass[journal,onecolumn]{IEEEtran}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{tabularx}
+\begin{document}
+
+\title{Predicción Multiclase de Riesgo Cardiovascular en Población Adulta}
+
+\author{Álvaro~Arcís~Reverte y Alejandro~Nicolás~Navarro%
+\thanks{Este trabajo ha sido desarrollado en el marco de la asignatura de Machine Learning del Máster Universitario en Inteligencia Artificial de la Universidad de Murcia (curso académico 2026/2027), en colaboración con el caso de estudio clínico del Hospital Morales Meseguer.}%
+\thanks{Los autores pertenecen a la Facultad de Informática, Universidad de Murcia, España (correos electrónicos: alvaro.arcisr@um.es, a.nicolasnavarro@um.es).}}
+
+\maketitle
+
+\begin{abstract}
+La estratificación precisa del riesgo cardiovascular constituye un pilar esencial en la medicina preventiva para mitigar la morbimortalidad y priorizar intervenciones terapéuticas. En este trabajo se aborda la clasificación multiclase del riesgo cardiovascular (bajo, moderado y alto) sobre una cohorte clínica adulta de 2250 pacientes del Hospital Morales Meseguer. Se implementó un flujo metodológico riguroso libre de fugas de información (\textit{data leakage}), evaluando incrementalmente técnicas de limpieza fisiológica, recodificación diagnóstica de diabetes, sobremuestreo sintético balanceado (\textsc{SMOTENC}) y selección secuencial de características por grupos (\textsc{SFS}). Mediante un esquema de validación cruzada anidada y búsqueda de hiperparámetros, se comparó un panel representativo de cinco familias algorítmicas (Regresión Logística, Linear SVC, Random Forest, AdaBoost e HistGradientBoosting). Los resultados demuestran que la Regresión Logística Multinomial con recodificación diagnóstica ($P_2$) ofrece el rendimiento más robusto y equilibrado, alcanzando un $F_1$-score macro de $0{.}654$ en el conjunto de test ciego (gap de generalización de solo $0{.}025$), un AUC-ROC de $0{.}810$ y una sensibilidad del $76{.}7\%$ en la detección de pacientes de alto riesgo (capturando al $97{.}8\%$ en seguimiento de riesgo moderado o alto sin descartes graves). La clase de riesgo moderado ($F_1 = 0{.}479$) se identifica como la principal frontera biológica difusa del problema. Por su óptimo compromiso entre capacidad discriminativa, ausencia de sobreajuste y transparencia clínica, se propone este modelo como herramienta de triaje asistencial interpretable para el entorno hospitalario.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Riesgo cardiovascular, clasificación multiclase, Machine Learning, regresión logística, validación cruzada anidada, soporte a la decisión clínica.
+\end{IEEEkeywords}
+
+
+\section{Introducción}
+\IEEEPARSTART{L}{as} enfermedades cardiovasculares continúan siendo una de las mayores amenazas para la salud pública global y una de las principales causas de morbimortalidad a nivel mundial. El desarrollo de esta práctica busca implementar modelos de \textit{Machine Learning} para la práctica médica cotidiana, realizando la clasificación preventiva del riesgo cardiovascular en tres categorías (riesgo bajo, moderado o alto), abordando así un problema de clasificación multiclase. Para ello, se proporcionan 2254 registros de pacientes y 27 variables (más el objetivo) sociodemográficas, clínicas, analíticas y de estilo de vida en un fichero, aportados por el equipo médico e investigador del Hospital Morales Meseguer \cite{enunciado2026}.
+
+A pesar del potencial de estos modelos, el conjunto de datos original revela la presencia de ruido instrumental, errores de adquisición, valores biológicamente imposibles, discordancias fisiológicas entre biomarcadores y un notable desbalanceo de clases. Entrenar modelos directamente con datos crudos provocaría que aprendieran patrones falsos y fallaran cuando finalmente se apliquen a pacientes reales.
+
+Por lo tanto, antes de entrenar los modelos, se debe realizar un análisis exploratorio de los datos (EDA) para formular técnicas que permitan reducir el ruido y las inconsistencias clínicas, corregir los errores de registro, abordar el desbalanceo de clases y decidir cómo actuar sobre este último.
+
+El objetivo es diseñar, entrenar y evaluar 5 algoritmos de clasificación (2 modelos base o lineales y 3 modelos avanzados de ensamble) optimizados mediante un esquema de validación cruzada anidada y un ajuste exhaustivo de hiperparámetros, identificando las métricas de rendimiento más críticas para seleccionar el modelo final óptimo.
+
+\section{Materiales}
+El conjunto de datos \textit{enfermedad\_cardiovascular.csv} consta de 2254 filas (ejemplos) y 28 columnas (variables o atributos), siendo 27 variables predictoras y 1 la variable objetivo, que corresponde al riesgo cardiovascular. Al contar con 3 categorías, se trata de un problema de clasificación multiclase, en el que se debe predecir una de las tres categorías devolviendo una etiqueta de clase discreta en vez de un valor numérico continuo, por lo que no se trata de un problema de regresión. Todas las variables incluidas en el conjunto de datos aportan información relevante para evaluar el riesgo cardiovascular y tampoco existen ejemplos duplicados a eliminar. En cuanto a los tipos de variables:
+
+\begin{itemize}
+    \item \textbf{19 variables numéricas}, las cuales están todas en \textit{float}. Estas son \textit{edad}, \textit{presion\_sistolica}, \textit{presion\_diastolica}, \textit{colesterol\_total}, \textit{colesterol\_hdl}, \textit{colesterol\_ldl}, \textit{trigliceridos}, \textit{glucosa\_ayunas}, \textit{indice\_masa\_corporal}, \textit{frecuencia\_cardiaca\_reposo}, \textit{horas\_sueno\_diarias}, \textit{consumo\_alcohol\_semanal}, \textit{anos\_fumador}, \textit{proteina\_c\_reactiva}, \textit{acido\_urico}, \textit{clearance\_creatinina}, \textit{frecuencia\_ejercicio\_semanal}, \textit{perimetro\_cintura} y \textit{hemoglobina\_glicosilada}.
+    
+    \item \textbf{5 variables booleanas} codificadas en binario. Estas son \textit{fumador\_actual}, \textit{hipertension\_previa}, \textit{diabetes\_mellitus}, \textit{tratamiento\_estatinas} y \textit{uso\_antihipertensivos}.
+
+    \item \textbf{3 variables categóricas}. Estas son \textit{tipo\_alimentacion} (Mediterránea, Occidental, Vegetariana, Baja en carbohidratos), \textit{nivel\_actividad} (Sedentario, Ligeramente activo, Moderadamente activo, Muy activo) y \textit{antecedentes\_familiares\_tipo} (Ninguno, Materno, Paterno, Ambos).
+
+    \item \textbf{La variable objetivo multiclase} \textit{riesgo\_cardiovascular}, que cuenta con 3 categorías (0: Bajo riesgo, 1: Riesgo moderado, 2: Alto riesgo). Al proporcionarse la variable objetivo en el conjunto de datos, se trata de un problema de aprendizaje supervisado.
+\end{itemize}
+
+En un primer análisis de los datos, comprobando el mínimo, el máximo, la media, la desviación, la mediana (valor en el 50\% de los datos) y los cuartiles del 25\% y 75\%, se encontraron varias anomalías.
+
+% TODO: VER SI QUEDA HUECO PARA METER LA TABLA
+
+Primero, variables numéricas que deberían haber sido discretas según la descripción del dataset proporcionado para la práctica (\textit{edad}, \textit{frecuencia\_ejercicio\_semanal}, \textit{anos\_fumador}, \textit{frecuencia\_cardiaca\_reposo} y \textit{consumo\_alcohol\_semanal}) se presentan como numéricas continuas con valores decimales, lo cual resulta incoherente.
+
+Al analizar el valor mínimo en \textit{edad} (9.80), se revela que la base de datos contiene filas correspondientes a menores de edad (específicamente, se detectaron 4 ejemplos). Estas filas no pertenecen a la población de estudio del problema, centrada en adultos, por lo que se consideran registros no válidos que deben ser eliminados para evitar que el modelo aprenda patrones sesgados o distorsione el proceso de aprendizaje.
+
+En cuanto a los valores nulos, se encuentran 4 variables con valores missing (horas\_sueno\_diarias con un 7.99\% de valores missing, proteina\_c\_reactiva con 6.97\%, colesterol\_ldl con 5.99\% y glucosa\_ayunas con 4.97\%). A pesar de su presencia, se descarta la opción de eliminar las columnas afectadas, puesto que ninguna supera el umbral del 10\%, considerado habitual para tomar este tipo de decisiones drásticas.
+
+La detección de problemáticas más exhaustiva, que requirió contrastar la información e hipótesis con fuentes, consistió en la localización de valores físicos y biológicos clínicamente imposibles. En primer lugar, se identificaron 4 registros en \textit{colesterol\_hdl} y otros 4 en \textit{trigliceridos} con valores negativos (ninguno igual a cero), lo cual resulta fisiológicamente inviable, ya que estos valores no pueden ser nulos ni negativos en el ámbito clínico. En segundo lugar, se detectaron 177 casos con valores negativos en \textit{consumo\_alcohol\_semanal}, otra condición físicamente imposible.
+
+En cuanto a los valores que superan o caen por debajo de un límite biológico clínicamente imposible, se encontraron las siguientes incoherencias en variables individuales:
+
+\begin{itemize}
+    \item Hay un caso que presenta un paciente que lleva más años fumando que edad. Por suerte, este caso coincide con un menor de edad, por lo que será descartado durante el preprocesamiento. 
+
+    \item Se encuentran en \textit{indice\_masa\_corporal} 19 valores por debajo de los 13 $\text{kg/m}^2$.
+
+    \item Los valores en la variable \textit{frecuencia\_ejercicio\_semanal} representan el número de días a la semana con actividad física moderada o intensa. Se encuentran 41 valores que superan los 7 días, lo que se encuentra fuera del rango lógico posible ([0, 7]).
+
+    \item Hay un valor por debajo del 3\% en sangre en \textit{hemoglobina\_glicosilada} (con un mínimo del 2.82\%).
+
+    \item Un valor por debajo de 60 mmHg en presión sistólica y 40 mmHg en presión diastólica se considera un error de registro. Aunque son valores científicamente posibles, únicamente se registran en situaciones como un shock severo o una parada cardiorrespiratoria inminente \cite{evans2021sepsis}, lo cual resulta impropio para un paciente estable al que se le quiere evaluar para la prevención del riesgo cardiovascular. Se encuentran 4 ejemplos afectados. Estos umbrales se sitúan de forma conservadora muy por debajo del límite de hipotensión (por debajo de los 90/60 mmHg \cite{nhlbi_hipotension,medlineplus_hipotension}, hay 148 casos), para poder conservar los casos reales de presión baja, descartando únicamente las situaciones críticas anteriores y manteniendo los casos de hipotensión.
+ 
+\end{itemize}
+
+Además de realizar comprobaciones de valores clínicamente imposibles, se deben llevar a cabo comprobaciones entre variables cruzadas, es decir, verificar si existe coherencia lógica entre dos o más variables de un mismo paciente. A continuación, se muestran las encontradas:
+
+\begin{itemize}
+    \item Los 478 casos con discordancia aparente en el uso de antihipertensivos sin diagnóstico previo de hipertensión no se consideran un error de datos, ya que estos fármacos se utilizan en otros escenarios aparte del tratamiento de la hipertensión.
+
+    \item Hay 597 casos que, según criterios de diagnóstico oficiales \cite{ada2024diagnosis}, coinciden con una diabetes mellitus tipo 2, pero que en el conjunto de datos no se han marcado.
+
+    \item Según criterios oficiales \cite{who2000obesity}, un IMC superior a 35 $\text{kg/m}^2$ indica obesidad severa, lo cual resulta incompatible con un perímetro de cintura inferior a 70 cm (propio de personas muy delgadas). De forma inversa, también es clínicamente imposible registrar un bajo peso (IMC inferior a 18.5) acompañado de un perímetro de cintura superior a 110 cm. Se encontraron 36 casos.
+
+   \item En los parámetros glucémicos, una hemoglobina glicosilada inferior al 5.5\% refleja un control glucémico normal en los últimos meses, lo cual resulta incoherente con una glucosa en ayunas superior a 180 mg/dL (hiperglucemia marcada). De forma inversa, una hemoglobina glicosilada superior al 9\% indica una hiperglucemia crónica mal controlada, lo que contradice un valor de glucosa en ayunas inferior a 80 mg/dL. Se encontró un caso incoherente.
+
+   \item Se encontraron 44 casos en los que la presión sistólica era menor o igual que la presión diastólica.
+
+\end{itemize}
+
+En cuanto a la clase 0, representa el 50\% de los casos del conjunto de datos, la clase 1 el 30\% y la clase 2 el 20\%. Aunque estos resultados indican un desbalanceo moderado, hay que tener en cuenta que la clase de mayor riesgo (2), que es la más crítica, está presentando menos de la mitad de observaciones que la clase baja (0), por lo que será necesario prestar especial atención a las métricas de evaluación de esta clase minoritaria y valorar técnicas de balanceo durante el entrenamiento para evitar que el modelo sesgue sus predicciones hacia la clase 0.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{figuras/eda_spearman.png}
+\caption{Matriz de correlación de Spearman entre las variables numéricas y el riesgo cardiovascular.}
+\label{fig:spearman}
+\end{figure}
+
+
+Al analizar la matriz de correlación de Spearman \cite{spearman1904}, se observa que las variables predictoras mantienen una relación moderada con la variable objetivo, lo cual indica que aportan información útil para predecir el riesgo cardiovascular sin que el problema dependa de una sola variable. Por un lado, las variables que más se asocian con un aumento del riesgo (correlación positiva) son el consumo de alcohol ($r = +0.39$), la proteína C reactiva ($r = +0.28$), la hemoglobina glicosilada ($r = +0.28$), el ácido úrico ($r = +0.21$) y la glucosa ($r = +0.21$), lo que implica que a medida que suben estos valores, aumenta la probabilidad de tener un riesgo alto. Por otro lado, el ejercicio físico ($r = -0.21$) y el colesterol HDL ($r = -0.20$) presentan una correlación negativa, lo que indica que con valores más altos en estas variables, menor es el riesgo del paciente. En cuanto a la relación entre las variables predictoras, sus correlaciones son cercanas a cero. Esto indica que no hay relaciones fuertes entre ellas ni redundancia evidente, por lo que no es necesario eliminar columnas ni aplicar técnicas de reducción de dimensionalidad como PCA.
+
+No obstante, en condiciones clínicas habituales, existe una estrecha relación entre el colesterol total y otras tres variables del perfil lipídico, regidas por la fórmula de Friedewald \cite{friedewald1972}: $\text{colesterol\_total} = \text{colesterol\_hdl} + \text{colesterol\_ldl} + \frac{\text{trigliceridos}}{5}$. Sin embargo, como se observó anteriormente, apenas existe correlación entre las variables predictoras, lo cual resulta incoherente dada su dependencia matemática. Por ello, se contrastó el valor registrado frente al valor teórico calculado, aplicando un margen de tolerancia del 15\%. El análisis reveló que el 57.76\% de los registros no se ajustan al valor esperado a pesar de estar expresados en las mismas unidades (mg/dL), lo que evidencia una grave inconsistencia o ruido en la captura de estos datos. La inconsistencia de datos ya se comenzaba a notar cuando se comprobó cuántos registros presentaban un colesterol total menor a la suma de los dos tipos de colesterol, habiendo un 24.8\% de los registros que lo incumplían.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{figuras/eda_comorbilidades.png}\\[4pt]
+\includegraphics[width=0.7\textwidth]{figuras/eda_estilo_vida.png}
+\caption{Arriba, porcentaje de pacientes con cada comorbilidad o tratamiento según el nivel de riesgo. Abajo, distribución del tipo de alimentación, el nivel de actividad y los antecedentes familiares dentro de cada nivel de riesgo.}
+\label{fig:comorbilidades}
+\end{figure}
+
+
+Al analizar las comorbilidades de forma gráfica, se comprobó que la prevalencia de cada comorbilidad y tratamiento (medida a través de las variables binarias) aumenta con el nivel de riesgo cardiovascular. La actividad física elevada y las dietas mediterránea o vegetariana reducen el riesgo cardiovascular, mientras que la dieta occidental y los antecedentes familiares disparan los casos de riesgo alto.
+
+La variable \textit{proteina\_c\_reactiva} representa la PCR ultrasensible, útil para identificar el riesgo cardiovascular conforme aumentan sus valores. No obstante, según la comunidad científica \cite{pearson2003crp}, los valores superiores a 10 mg/L suelen reflejar infecciones o procesos inflamatorios agudos que requieren repetir la prueba, un rango en el que se sitúan 10 casos de la muestra. Al observar los tramos de la PCR, se aprecia un punto crítico al superar 1 mg/L. En ese momento, los casos de riesgo alto se disparan del 0.18\% al 28.23\%. Sin embargo, esta proporción no continúa creciendo en los tramos superiores (3–10 mg/L o más de 10), lo que sugiere que, una vez cruzado el primer umbral, la PCR deja de ser un factor determinante para distinguir los niveles más graves de riesgo.
+
+Se comprobó que el riesgo cardiovascular aumenta progresivamente al segmentar a los pacientes en estratos clínicos. En el caso de la edad, se definieron cuatro grupos etarios según los cortes de población habituales: adulto joven [18-39], adulto medio [40-54], adulto maduro [55-64] y adulto mayor [a partir de 65]. Para el IMC, se adoptó la clasificación oficial de la Organización Mundial de la Salud (OMS) \cite{who2000obesity} en seis grupos: bajo peso [menor de 18.5], normopeso [18.5-25], sobrepeso [25-30], obesidad tipo I [30-35], obesidad tipo II [35-40] y obesidad tipo III [a partir de 40]. Al cruzar estas categorías con el riesgo cardiovascular durante el EDA, se confirmó que a mayor edad o mayor IMC, la proporción de bajo riesgo se reduce progresivamente mientras que los casos de riesgo alto aumentan, incluso al descartar valores clínicamente imposibles en el caso del IMC.
+
+Finalmente, durante el EDA se realizó un estudio para determinar si había variables con varianza cercana a cero para considerar su descarte. Para ello, se utilizan las dos métricas conjuntas de los apuntes \cite{kuhn2013applied}, las cuales se aplican a todas las variables menos al target. Constan del ratio entre la frecuencia del valor más frecuente (el resultado debe ser inferior a 19) y la frecuencia del segundo valor más frecuente, así como del porcentaje de valores únicos sobre el total de objetos (debe ser superior al 10\%). Los límites establecidos responden a un estándar en Machine Learning. Para considerar una variable con varianza cercana a cero, y por tanto proceder a su eliminación, se deben incumplir ambas métricas. El dataset no presenta variables con varianza cercana a cero, por lo que se descarta eliminar variables por baja varianza.
+
+\section{Metodología}
+
+Para garantizar la validez científica y la reproducibilidad del trabajo, el conjunto de datos completo (2254 registros) se dividió con una partición estratificada por la variable objetivo en un conjunto de entrenamiento del 80\% (1803 ejemplos) y un conjunto de test del 20\% (451 ejemplos). A continuación se excluyeron los 4 menores de edad, que no pertenecen a la población de estudio. Los 4 cayeron en el entrenamiento, por lo que la población adulta queda en 1799 pacientes de entrenamiento y 451 de test. El entrenamiento se destina exclusivamente al ajuste de transformadores, remuestreo, selección de variables y entrenamiento de los clasificadores para seleccionar el óptimo. El test se ha mantenido aislado e inalterado durante toda la experimentación y el ajuste de hiperparámetros y se evaluó una única vez al final del proyecto, solo con el modelo elegido, para estimar su rendimiento real sin interferir en la selección.
+
+Se desarrollaron técnicas de saneamiento de los datos para resolver las irregularidades observadas. Primero, a partir de las anomalías detectadas durante el EDA, se implementó una serie de funciones de limpieza sobre el conjunto de datos, que constan de la siguiente forma:
+
+\begin{enumerate}
+    \item En las columnas de la presión sistólica y diastólica, se sustituyen sus valores por nulos (NaN) que no cumplen la condición de que la presión diastólica sea menor que la sistólica. Esta comprobación se ejecutó antes que la aplicación de los límites mínimos de presión. De esta forma, si un paciente tiene la presión invertida, ambos valores pasan a ser nulos. Si se hiciera al revés, se descartaría solo una de las dos presiones por ser demasiado baja y se conservaría la otra, que probablemente también sea incorrecta.
+
+    \item Los registros con valores biológicamente imposibles que se comentaron en el EDA se sustituyen por nulos utilizando los umbrales establecidos en el EDA. Específicamente, se aplica a \textit{colesterol\_hdl} y \textit{trigliceridos} con valores $\le 0$, \textit{indice\_masa\_corporal} $<13\,\text{kg/m}^2$, \textit{frecuencia\_ejercicio\_semanal} $>7$ días, \textit{hemoglobina\_glicosilada} $<3\%$ y presiones por debajo de los umbrales de seguridad ($<60$ mmHg para la sistólica y $<40$ para la diastólica). Para el consumo de alcohol semanal se decide imputar por cero en vez de por NaN, ya que un valor negativo puede responder a un valor para indicar la no consumición de alcohol en pacientes en abstinencia. Sin embargo, \textit{colesterol\_hdl} y \textit{trigliceridos} no admiten cero como un valor correcto, por lo que deben tratarse como un error en la introducción de los datos.
+
+    \item Para solucionar la presencia de valores decimales en las variables conceptualmente discretas, se aplicaron 3 técnicas de redondeo diferentes. Primero, para la edad se truncó hacia abajo, ya que no cambia hasta alcanzar el siguiente año. Sin embargo, a los años de tabaquismo se les aplica un redondeo para representar de forma más equilibrada el tiempo de exposición al tabaco. Este mismo criterio se aplica para el redondeo del consumo de alcohol semanal y la frecuencia cardiaca en reposo. Por último, la frecuencia de ejercicio semanal se trunca hacia arriba, ya que si realiza mínimamente alguna actividad física durante un día, ese día debe incluirse.
+
+    \item Se ha decidido eliminar la variable \textit{colesterol\_total} debido a los graves errores de concordancia médica encontrados durante el EDA, además de que su correlación con la variable objetivo era bastante reducida ($r=0.10$), por lo que su eliminación no afecta significativamente a la capacidad predictiva de los modelos.
+
+    \item Finalmente, se imputan a NaN las incoherencias clínicas cruzadas utilizando los umbrales establecidos en el EDA. Específicamente, se aplica a \textit{indice\_masa\_corporal} $>35\text{ kg/m}^2$ y \textit{perimetro\_cintura} $<70$ cm, a \textit{indice\_masa\_corporal} $<18.5\text{ kg/m}^2$ y \textit{perimetro\_cintura} $>110$ cm, a \textit{hemoglobina\_glicosilada} $<5.5\%$ y \textit{glucosa\_ayunas} $>180$ mg/dL y finalmente a \textit{hemoglobina\_glicosilada} $>9\%$ y \textit{glucosa\_ayunas} $<80$ mg/dL.
+\end{enumerate}
+
+Sin embargo, no todas las decisiones de tratamiento son evidentes. Durante el EDA se encontraron errores en los datos basados en hipótesis clínicas que, aunque teóricamente fundadas, podrían perjudicar la capacidad de generalización. Al analizar los datos, se detectaron 597 pacientes que cumplen criterios de diabetes tipo 2 pero figuran con un cero en la variable booleana correspondiente. Ante esta discrepancia, surge la duda de si se trata de un error de registro o de una condición real impuesta por los médicos que no debe ser alterada de forma arbitraria.
+
+El otro caso ambiguo es en la proteína C reactiva ultrasensible. Como se explicó anteriormente, los valores superiores a 10 mg/L suelen reflejar infecciones o procesos inflamatorios agudos que requieren repetir la prueba, por lo que ya no informan sobre el riesgo cardiovascular. No obstante, eliminar estos pacientes del conjunto de entrenamiento reduce el volumen de casos disponibles y podría impedir que el modelo aprenda a clasificar a aquellos pacientes que en consulta real acudan presentando estos valores altos, ya que, al contrario que en los casos anteriores, no se trata de datos clínicamente imposibles, sino casos reales en la práctica.
+
+Además, también se planteó sustituir \textit{edad} por su grupo etario e \textit{indice\_masa\_corporal} por su categoría de la OMS para así poder sustituir los valores continuos por sus categorías para evaluar si este agrupamiento aporta mayor estabilidad.
+
+Para contrastar estas hipótesis, se desarrolló una primera fase de preprocesamiento incremental, de forma que cada variante añade un único cambio respecto a la anterior para que la diferencia de métricas entre dos preprocesados consecutivos se pueda atribuir a dicho cambio, permitiendo aislar su impacto exacto. El resultado ganador de esta primera fase servirá como preprocesamiento base para la fase 2, en la que se evaluarán técnicas de preprocesamiento más complejas. Los preprocesamientos en esta primera fase son los siguientes:
+
+\begin{itemize}
+    \item \textbf{P0\_base:} Conserva todas las columnas y filas originales, incluyendo los valores anómalos y \textit{colesterol\_total}.
+    
+    \item \textbf{P1\_limpieza:} Incorpora todas las técnicas de saneamiento de datos comunes para resolver las irregularidades observadas (orden de presiones, conversión de valores imposibles a NaN, alcohol a 0, redondeos, incoherencias cruzadas y eliminación de \textit{colesterol\_total}).
+    
+    \item \textbf{P2\_diabetes:} Construido sobre \textit{P1}. Añade la reclasificación a 1 de la variable \textit{diabetes\_mellitus} en los 490 casos del train con analítica diagnóstica positiva.
+    
+    \item \textbf{P3\_pcr:} Se construye sobre la mejor variante previa (más adelante se mostrará que es \textit{P2}). Evalúa la eliminación de pacientes con proteína C reactiva superior a 10 mg/L. Para evitar fugas de información y no falsear el escenario real de evaluación, esta eliminación se aplica de forma estricta únicamente sobre las muestras de entrenamiento, manteniendo intactos los conjuntos de validación y test.
+    
+    \item \textbf{P4\_discretizacion:} Se construye sobre la mejor variante previa (más adelante se mostrará que es \textit{P2}, aunque se incluye la comparación usando \textit{P3}), sustituyendo las variables numéricas de \textit{edad} e \textit{indice\_masa\_corporal} por sus correspondientes grupos etarios y categorías de la OMS.
+\end{itemize}
+
+Como se puede observar, es importante mencionar que el \textit{P0} actúa como un punto de partida y sirve únicamente como referencia analítica, pero no es una solución de preprocesamiento admisible, ya que no soluciona ninguna de las problemáticas detectadas en el EDA, por lo que presenta una inviabilidad clínica al operar sobre datos corruptos o clínicamente imposibles. Por tanto, las soluciones viables reales son las que parten de \textit{P1} hacia delante.
+
+También cabe destacar que tras aplicar el preprocesamiento \textit{P1}, no se detecta ninguna variable con varianza cercana a cero siguiendo el criterio que se realizó en el EDA, además, tampoco se decide eliminar ninguna columna por aumento del porcentaje de los valores nulos, ya que se mantienen todos por debajo del 10\%. 
+
+Tras identificar en la primera fase la mejor base de limpieza común (más adelante se mostrará que la ganadora es \textit{P2}), se diseñó una segunda fase experimental para abordar el desbalanceo moderado de clases \cite{he2009imbalanced} (la clase 2 representa solo el 20\% del total frente al 50\% de la clase 0) y la posible presencia de variables ruidosas o redundantes. Los preprocesamientos en esta segunda fase son los siguientes:
+
+\begin{itemize}
+    \item \textbf{P5\_smotenc:} Aplica la técnica de sobremuestreo \textit{SMOTENC} \cite{chawla2002smote} para equilibrar las clases. Se elige esta variante sobre \textit{SMOTE} porque la versión clásica solo sabe trabajar con números continuos, mientras que el conjunto de datos mezcla variables numéricas con variables categóricas (nominales, ordinales y booleanas).
+    
+    \item \textbf{P6\_ros:} Aborda el desbalanceo mediante sobremuestreo aleatorio (\texttt{RandomOverSampler}) \cite{lemaitre2017imblearn}, duplicando aleatoriamente pacientes reales de las clases minoritarias hasta igualar a la clase mayoritaria (la baja).
+    
+    \item \textbf{P7\_sfs\_grupos:} Aplica selección secuencial de características hacia delante (\texttt{SequentialFeatureSelector}) por grupos, eliminando variables poco informativas o redundantes.
+\end{itemize}
+
+A diferencia de las limpiezas de la primera fase, estas tres técnicas aprenden parámetros a partir de los datos (como distancias entre vecinos o coeficientes de importancia), por lo que se deben aplicar de forma dinámica y exclusiva sobre el entrenamiento de cada partición.
+
+Todas las configuraciones comparten el mismo tratamiento de variables categóricas, ya que ninguno de los modelos elegidos procesa texto. Se aplica \textit{One-Hot Encoding} sobre las variables nominales (\textit{tipo\_alimentacion} y \textit{antecedentes\_familiares\_tipo}), creando variables \textit{dummy}, es decir, nuevas columnas binarias independientes para cada categoría posible. Además, se elimina la primera categoría de cada variable para evitar redundancia, generando así una columna menos en la que la ausencia de unos indica dicha categoría. En cuanto a \textit{nivel\_actividad}, se ha aplicado una codificación ordinal (0, 1, 2, 3), ya que sus valores siguen un orden lógico de menor a mayor ejercicio y asignarles números consecutivos permite respetar dicha progresión y posteriormente se estandariza. Las variables booleanas se mantienen.
+
+En cuanto a las variables numéricas continuas, todas las configuraciones comparten una estrategia de imputación por la mediana de los valores NaN y estandarización mediante \textit{StandardScaler} ($z = \frac{x - \mu}{\sigma}$). Se optó por la mediana frente a la media aritmética debido a su robustez frente a distribuciones asimétricas, las cuales se detectaron en el EDA en varias variables clínicas con una marcada cola a la derecha.
+
+Esta imputación común resulta obligatoria para algunos de los modelos seleccionados, que no admiten valores ausentes de forma nativa y provocarían un fallo en el entrenamiento si no se sanean previamente. Además, aunque ciertos algoritmos son capaces de gestionar valores ausentes, esto no garantiza un rendimiento superior al obtenido mediante la imputación por la mediana. Por lo tanto, dado el alcance del proyecto, que habría requerido contrastar sistemáticamente ambos enfoques, se optó por unificar un mismo preprocesamiento. En cuanto al escalado, se mantiene de forma común porque parte de los modelos seleccionados son sensibles a la escala de las variables, mientras que los restantes, al ser de tipo árbol, resultan invariantes a este proceso.
+
+Existe una excepción particular a este esquema en la variante \textit{P4}. En las configuraciones previas (\textit{P0} a \textit{P3}), las variables cualitativas y booleanas carecían por completo de valores ausentes, por lo que no era necesario aplicar ninguna técnica de imputación sobre ellas. Sin embargo, en \textit{P4}, al transformar el \textit{indice\_masa\_corporal} continuo en la variable categórica ordinal de grupos de la OMS (\textit{imc\_grupo}), los registros que contenían \textit{NaN} (tanto los casos con IMC menor a $13\,\text{kg/m}^2$ como las incoherencias cruzadas puestas a nulo en la limpieza) pasaron a ser valores ausentes dentro de una variable no numérica. Debido a esto, en dicha variante la columna deja de tratarse mediante la mediana y el escalado estándar continuo, pasando a imputarse obligatoriamente mediante la moda, evitando que la mediana genere categorías intermedias decimales inexistentes, para posteriormente transformarse en variables binarias (\textit{dummies}) junto al resto de atributos cualitativos. Por su parte, la variable de grupos de edad no presentó ausencias al no contener valores nulos originales. A ambos se les aplica \textit{One-Hot Encoding}, ya que en este preprocesamiento se considerarían variables categóricas discretas.
+
+En el caso de \textit{SMOTENC} (\textit{P5}), al haberse elegido esta variante nominal-continua para tratar tanto variables numéricas como categóricas, debe aplicarse antes del \textit{One-Hot Encoding}. Un \textit{SMOTE} convencional aplicado tras la codificación interpolaría las \textit{dummies} y las booleanas, generando pacientes imposibles (por ejemplo, 0.63 fumadores o combinaciones contradictorias de dieta). Para evitarlo, \textit{SMOTENC} interpola solo las numéricas, previamente escaladas para que ninguna domine la distancia entre vecinos, mientras que para las variables nominales, la variable ordinal (\textit{nivel\_actividad}) y las booleanas, el propio algoritmo calcula internamente el valor sintético mediante la moda de los $k$ vecinos más cercanos. De este modo, se preserva íntegramente la coherencia biológica y las categorías válidas antes de aplicar la codificación \textit{One-Hot} definitiva.
+
+En cuanto a \textit{P6}, inicialmente se planteó \textit{ADASYN} como segunda técnica de sobremuestreo, pero presenta el mismo problema que \textit{SMOTE}: genera pacientes sintéticos por interpolación, por lo que las \textit{dummies} y las booleanas tomarían valores decimales. Evitarlo exigía programar una clase propia que tratara aparte las variables categóricas, como ya hace \textit{SMOTENC}, debido a que no existe una clase nativa preparada para esta problemática. Por ello se optó por \textit{RandomOverSampler} (ROS), que duplica aleatoriamente pacientes reales de las clases minoritarias hasta igualar a la mayoritaria. Al no inventar valores, no puede generar pacientes imposibles y se integra sin cambios en el \textit{Pipeline}. Su inconveniente es que, al repetir pacientes, los modelos más flexibles pueden memorizarlos, por lo que en esta variante se vigiló especialmente el gap.
+
+Para \textit{P7}, la primera opción fue la eliminación recursiva de variables (RFE). Sin embargo, RFE evalúa cada columna de forma independiente y podía eliminar una sola \textit{dummy} de una variable categórica sin eliminar el resto de su grupo. Por ejemplo, quitar \textit{antecedentes\_familiares\_tipo\_Paterno} y conservar \textit{Materno} y \textit{Ninguno} haría que un paciente con antecedentes paternos se codificara igual que uno con antecedentes de ambos progenitores (\textit{Ambos}), que es la categoría de referencia. Se programó una versión mixta de RFE que trataba las \textit{dummies} por grupos, pero se prefirió una solución de librería que lo resolviera de forma nativa. Se valoró \textit{Group Lasso}, que penaliza los coeficientes por grupos de variables, pero su repositorio advertía de que estaba desactualizado y recomendaba usarlo con precaución, por lo que se descartó. Finalmente se utilizó \textit{SequentialFeatureSelector} de \textit{mlxtend} \cite{raschka2018mlxtend}, que admite grupos de variables: las \textit{dummies} de una misma variable original entran o salen juntas. La selección se hace con una regresión logística, optimizando el F1-macro con 2 particiones internas y conservando entre 8 y 20 grupos de variables. En las primeras pruebas se comparó la búsqueda hacia atrás (\textit{backward}), más exhaustiva porque parte de todas las variables y tiene en cuenta las relaciones entre ellas, con la búsqueda hacia delante (\textit{forward}). La búsqueda hacia atrás era mucho más lenta y no producía una mejora apreciable, por lo que, dado el alcance del trabajo, se mantuvo la búsqueda hacia delante. Aun así, es el preprocesado más costoso, ya que la selección se repite dentro de cada partición de la búsqueda de hiperparámetros.
+
+Para la experimentación interna sobre el conjunto de entrenamiento (el 80\% de los datos, el conjunto de test no se evalúa hasta el final) se implementó un esquema de validación cruzada anidada \cite{varma2006bias,cawley2010overfitting}, que funciona de la siguiente forma:
+
+\begin{itemize}
+    \item \textbf{Bucle externo:} Se ejecutan 3 iteraciones independientes de remuestreo estratificado (\textit{StratifiedShuffleSplit}) dividiendo los datos en dos subconjuntos: 70\% para entrenamiento y 30\% para validación. Las métricas reportadas corresponden a la media $\pm$ desviación típica de las 3 iteraciones externas, empleándose para comparar de forma justa los preprocesamientos y algoritmos. Asimismo, la diferencia calculada iteración a iteración entre el rendimiento de entrenamiento y validación permite cuantificar con precisión el sobreajuste (\textit{gap} de generalización).
+    
+    \item \textbf{Bucle interno:}  Dentro del subconjunto de entrenamiento de cada una de las iteraciones externas, se ejecuta de forma aislada un \textit{GridSearchCV} \cite{pedregosa2011sklearn} con validación cruzada estratificada en 3 bloques (\textit{3-fold CV}), optimizando la métrica F1-macro. Esto permite seleccionar la configuración óptima de hiperparámetros para cada iteración, garantizando que los datos de validación externa jamás intervengan en la búsqueda ni contaminen el proceso de ajuste.
+\end{itemize}
+
+La estratificación es necesaria porque la clase de alto riesgo es minoritaria. Sin ella, una partición podría quedarse con muy pocos pacientes de esta clase y el recall sería inestable. El 30\% de validación (unos 540 pacientes, con más de 100 de alto riesgo) da estimaciones suficientemente estables de las métricas por clase. Como la semilla y el número de filas son idénticos en todos los preprocesados, todas las combinaciones modelo/preprocesado se evalúan exactamente sobre las mismas particiones, de modo que sus diferencias se deben solo al modelo o al preprocesado.
+
+Para controlar fugas de información \cite{kaufman2012leakage}, todas las transformaciones que aprenden parámetros estadísticos de los datos (imputación por mediana o moda, estandarización, sobremuestreo y selección de características) se encapsularon en un objeto \textit{Pipeline} de \textit{imblearn}. De este modo, los estadísticos se calculan únicamente sobre el fold de entrenamiento correspondiente y la transformación se aplica al fold de validación sin contaminación cruzada. Las reglas de limpieza de \textit{P1} y \textit{P2}, en cambio, son reglas fijas que no aprenden nada de los datos, por lo que se pueden aplicar antes de la partición sin provocar fugas.
+
+Asimismo, los filtros que eliminan filas (la exclusión de pacientes con PCR $>$ 10 mg/L de P3) se programaron mediante un \textit{FunctionSampler} que actúa exclusivamente durante el método \textit{fit}, asegurando que los conjuntos de validación y test conserven a todos los pacientes reales y que todas las configuraciones se evalúen exactamente sobre las mismas muestras, sin generar métricas artificialmente optimistas.
+
+Cada configuración se evaluó con tres métricas complementarias, medidas tanto en entrenamiento como en validación. Cada una responde a una pregunta distinta sobre el modelo y tiene un papel distinto en la selección:
+
+\begin{itemize}
+    \item \textbf{F1-macro:} Es la métrica principal porque trata por igual al riesgo bajo, moderado y alto, midiendo si el modelo clasifica bien las tres clases por igual mediante la media sin ponderar del F1 de cada clase, que a su vez equilibra precisión y sensibilidad. La exactitud (\textit{accuracy}), en cambio, es engañosa con clases desbalanceadas \cite{sokolova2009metrics}. Un modelo que predijera siempre riesgo bajo acertaría el 50\% de los casos sin detectar a ningún paciente de riesgo. Además, es mucho más estable entre particiones que el recall de alto riesgo (desviación típica de unos 0.02 frente a 0.05-0.10), lo que la hace adecuada para guiar la búsqueda de hiperparámetros y actuar como criterio principal de selección en el estudio.
+
+    \item \textbf{Recall de alto riesgo:} Indica qué proporción de los pacientes de alto riesgo detecta el modelo. Es clínicamente la métrica más crítica, puesto que un falso negativo en la clase 2 priva de intervención preventiva intensiva a un paciente con riesgo elevado de evento cardiovascular, mientras que una falsa alarma solo supone pruebas adicionales. Aun así, no se usa como métrica de optimización, ya que maximizarla en solitario lleva a clasificar a casi todos los pacientes como de alto riesgo, disparando las falsas alarmas sin que el modelo discrimine realmente. Por ello, actúa como criterio secundario.
+
+    \item \textbf{AUC ROC:} Evalúa si el modelo ordena bien a los pacientes según su riesgo con independencia del umbral de decisión \cite{fawcett2006roc}, calculándose como la media de tres AUC binarios, donde 0.5 equivale al azar y 1 a una separación perfecta. Esta métrica complementa a las anteriores y sirve de apoyo, ya que mientras que el F1-macro y el recall evalúan la decisión final (la clase con mayor probabilidad), el AUC evalúa la puntuación de la que sale esa decisión, midiendo la calidad del orden de las puntuaciones y señalando qué clase separa peor el modelo. Esto permite distinguir dos situaciones: si una clase tiene un AUC alto pero un recall bajo, el modelo la ordena bien y el problema está en el umbral, que podría ajustarse; si su AUC es bajo, el modelo no dispone de información suficiente para separarla y ningún umbral lo corrige.
+\end{itemize} 
+
+Para vigilar el sobreajuste se calculó el gap de cada métrica, $\text{gap} = \text{métrica}_{\text{train}} - \text{métrica}_{\text{val}}$, con un papel distinto en cada caso:
+
+\begin{itemize}
+    \item \textbf{Gap del F1 macro}: es la restricción de diseño, $\text{gap}_{F1} \leq 0.10$. Un umbral más estricto (0.05) descartaba configuraciones de ensamble que generalizan correctamente, mientras que a partir de 0.10 la diferencia indica un sobreajuste claro.
+    
+    \item \textbf{Gap del recall de alto riesgo}: solo se monitoriza. Con unos 108 pacientes de alto riesgo por partición de validación, cada paciente mueve el recall en casi 0.01 y su desviación entre particiones suele estar entre 0.05 y 0.10, de modo que es demasiado ruidoso para usarlo como restricción.
+    
+    \item \textbf{Gap del AUC}: detecta un sobreajuste de las probabilidades que el gap del F1 puede no ver. El F1 solo cambia cuando un paciente cambia de clase predicha, mientras que el AUC cambia en cuanto el modelo ordena peor a los pacientes nuevos que a los de entrenamiento.
+\end{itemize}
+
+El criterio final entre las configuraciones consistió en descartar las configuraciones con gap de F1 $> 0.10$, pues son considerados modelos con un sobreajuste claro, y quedarse con el de mayor F1-macro de validación, considerando que una diferencia menor que la desviación típica entre particiones no es relevante. En caso de empate se prioriza el recall de alto riesgo, sin ignorar el valor de gap para tomar la decisión, y se prefiere la opción que sea más estable, es decir, la que tenga menos desviación típica. No obstante, estas pautas no se aplican de forma rígida, quedando abiertas a la interpretación en función del comportamiento del modelo. Por ejemplo, ante un escenario donde un modelo obtenga un F1-macro ligeramente superior pero un recall de alto riesgo inaceptablemente bajo (o viceversa), se priorizará la opción que ofrezca un mejor equilibrio. 
+
+Para dar respuesta al requisito de evaluar un mínimo de cinco clasificadores (al menos 2 modelos base/lineales y 3 modelos basados en ensambles), en lugar de fijar arbitrariamente dos clasificadores simples, se contrastaron 3 familias de modelos base para determinar la representatividad de la frontera de decisión con dos modelos lineales (Regresión Logística \cite{hastie2009elements} y Linear SVC \cite{fan2008liblinear}) frente a uno no lineal (SVM, utilizando un kernel RBF \cite{cortes1995svm}). En cuanto a los ensambles, se eligieron Random Forest \cite{breiman2001rf}, AdaBoost \cite{freund1997adaboost,hastie2009samme} y HistGradientBoosting \cite{friedman2001gbm,ke2017lightgbm}, todos en su versión de clasificación, no regresión. 
+
+A continuación, la Tabla~\ref{tab:modelos_caracteristicas} sintetiza la caracterización técnica de los seis modelos evaluados (tres candidatos base y tres ensambles), detallando su formulación multiclase, su tolerancia a valores ausentes (\textit{NaN}), su sensibilidad frente a la escala numérica y la descripción del modelo.
+\begin{table}[H]
+\caption{Caracterización técnica de los modelos evaluados y requisitos de preprocesamiento}
+\label{tab:modelos_caracteristicas}
+\centering
+\small
+\renewcommand{\arraystretch}{1.25}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\begin{tabularx}{\textwidth}{|L{2.6cm}|L{2.0cm}|L{2.5cm}|L{2.1cm}|L{2.1cm}|Y|}
+\hline
+\textbf{Modelo} & \textbf{Familia} & \textbf{Estrategia multiclase} & \textbf{¿Admite NaN?} & \textbf{Escalado} & \textbf{Descripción del modelo} \\
+\hline
+\textbf{Regresión logística} & Base lineal & \textit{Softmax} (multinomial) & No (exige imputación) & Obligatorio ($L_2$) & Optimiza coeficientes mediante máxima verosimilitud con regularización para calcular probabilidades de pertenencia a cada clase. \\
+\hline
+\textbf{Linear SVC} & Base lineal & Uno contra resto (OvR) & No (exige imputación) & Obligatorio (márgenes) & Encuentra el hiperplano de separación de margen máximo entre clases en el espacio original de características. \\
+\hline
+\textbf{SVM (kernel RBF)} & Base no lineal & Uno contra uno (OvO) & No (exige imputación) & Obligatorio (distancias) & Proyecta los datos a un espacio de alta dimensión mediante un núcleo no lineal para trazar fronteras de decisión complejas. \\
+\hline
+\textbf{AdaBoost} & Ensamble (\textit{boosting}) & Algoritmo SAMME & No (exige imputación) & Invariante & Entrena árboles secuencialmente reponderando en cada iteración las muestras mal clasificadas para corregir errores. \\
+\hline
+\textbf{Random Forest} & Ensamble (\textit{bagging}) & Votación por promedio & Nativo (imputado por diseño) & Invariante & Construye múltiples árboles de decisión independientes sobre subconjuntos aleatorios y promedia sus predicciones. \\
+\hline
+\textbf{HistGradient\-Boosting} & Ensamble (\textit{boosting}) & Árboles aditivos multiclase & Nativo (imputado por diseño) & Invariante (histogramas) & Agrupa los datos continuos en histogramas (\textit{bins}) para acelerar el entrenamiento de árboles de decisión aditivos por gradiente. \\
+\hline
+\end{tabularx}
+\end{table}
+
+Esta comparativa justifica la arquitectura del \textit{Pipeline} común adoptado: aplicar imputación por mediana y estandarización (\textit{StandardScaler}) de forma global es una condición indispensable para el correcto funcionamiento de los modelos lineales y las SVM, sin perjudicar en modo alguno a los ensambles basados en árboles, que por diseño resultan invariantes a la escala numérica de las variables.
+
+La experimentación se dividió en dos fases para no multiplicar la matriz de combinaciones sin necesidad. En la fase 1 se compararon los preprocesados incrementales de limpieza (\textit{P0} a \textit{P4}) con los 5 modelos (una vez descartado uno de los modelos base) para quedarse con una única base de preprocesamiento. En la \textbf{fase 2} se comparó esa base frente a las técnicas que aprenden de los datos (\textit{P5}, \textit{P6} y \textit{P7}), de nuevo con los 5 modelos, formando una matriz $4 \times 5$. Por último, se realizó un ajuste fino aislado de los modelos con mayor sobreajuste y se seleccionó la mejor configuración modelo/preprocesado.
+
+En relación con la selección de los 2 modelos base, la SVM partía de un sobreajuste severo (0.189 de gap medio de F1-macro entre los subconjuntos de entrenamiento y de validación de las 3 particiones externas) y, una vez regularizada ($C \leq 0{.}1$ y $\gamma$ ajustado), quedó en un rendimiento intermedio (F1-macro 0.641) con la mayor desviación entre particiones y un AUC (0.803) inferior al de la regresión logística (0.833), por lo que se descartó. La Regresión Logística ofrecía el mejor F1-macro y AUC y Linear SVC el mayor recall de alto riesgo con el gap más estable.
+
+Para el ajuste de hiperparámetros, la búsqueda interna tiende a elegir siempre la combinación más compleja que se le ofrece, lo que en los ensambles se traduce en sobreajuste. Por ello, su espacio de búsqueda se acotó a mano sobre \textit{P1} en cinco versiones sucesivas, más una exploración de la frontera entre rendimiento y sobreajuste, hasta fijar unas rejillas comunes que después se aplicaron sin cambios con todos los preprocesados en las fases 1 y 2. Así, las diferencias entre preprocesados se deben a la propia técnica y no a haber buscado más en uno que en otro. La Tabla~\ref{tab:rejillas} recoge, para cada modelo, los hiperparámetros fijados, los buscados y qué aspecto del sobreajuste controla cada uno.
+
+\begin{table}[H]
+\caption{Rejillas de hiperparámetros comunes de las fases 1 y 2 y su función}
+\label{tab:rejillas}
+\centering
+\small
+\renewcommand{\arraystretch}{1.25}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\begin{tabularx}{\textwidth}{|L{2.6cm}|L{4.2cm}|L{4.0cm}|c|Y|}
+\hline
+\textbf{Modelo} & \textbf{Fijados} & \textbf{Rejilla de búsqueda} & \textbf{Comb.} & \textbf{Qué controla} \\
+\hline
+\textbf{Regresión logística} & Penalización $L_2$ (\textit{lbfgs}) & $C \in \{0{.}01,\ 0{.}1,\ 1,\ 10\}$, \textit{class\_weight} $\in \{$None, balanced$\}$ & 8 & $C$ es la inversa de la regularización: valores bajos simplifican el modelo. El balanceo da más peso a la clase de alto riesgo. \\
+\hline
+\textbf{Linear SVC} & --- & Igual que la regresión logística & 8 & $C$ regula la anchura del margen frente a los errores de entrenamiento. \\
+\hline
+\textbf{AdaBoost} & Árboles de profundidad 2 con hojas $\geq 20$ y \textit{class\_weight} = balanced & $n_{\text{estimators}} \in \{100, 200, 400\}$, $\eta \in \{0{.}1,\ 0{.}3,\ 0{.}5\}$ & 9 & Con tocones (profundidad 1) colapsaba (F1 0.40), porque un tocón solo puede predecir dos de las tres clases. $\eta$ y el número de árboles regulan cuánto se corrigen los errores. \\
+\hline
+\textbf{Random Forest} & 300 árboles, \textit{max\_samples} = 0.5, \textit{max\_features} = sqrt, \textit{class\_weight} = balanced\_subsample & Profundidad $\in \{3, 4\}$; \textit{min\_samples\_leaf} $\in \{40, 60\}$ & 4 & Árboles poco profundos y hojas grandes impiden memorizar pacientes; el submuestreo del 50\,\% decorrelaciona los árboles. \\
+\hline
+\textbf{HistGradient\-Boosting} & Tocones (profundidad 1), \textit{max\_bins} = 32, $L_2 = 10$, \textit{class\_weight} = balanced & \textit{min\_samples\_leaf} $\in \{100, 200\}$; iteraciones $\in \{50, 100\}$; $\eta \in \{0{.}05,\ 0{.}1\}$ & 8 & Los tocones dan un modelo aditivo sin interacciones; pocos \textit{bins}, hojas grandes y $L_2$ alta frenan el sobreajuste. \\
+\hline
+\end{tabularx}
+\end{table}
+
+En los ensambles se mantuvo siempre el balanceo de clases porque la exploración de la frontera mostró que quitarlo sube el F1-macro, pero hunde el recall de alto riesgo (HistGradientBoosting de 0.73 a 0.59 y Random Forest a 0.32). El ajuste fino posterior se limitó a las configuraciones afectadas y usó rejillas propias, más regularizadas que las comunes: AdaBoost con sobremuestreo (menos árboles y hojas de 50 a 150 pacientes) y Random Forest y HistGradientBoosting con más regularización sin SMOTENC.
+
+\section{Análisis de resultados}
+
+\subsection{Fase 1: preprocesados de limpieza}
+
+La Fig.~\ref{fig:fase1} muestra las tres métricas de validación de los cinco modelos con los preprocesados \textit{P0} a \textit{P4} y la Tabla~\ref{tab:gaps1} sus gaps. La banda azul de cada modelo marca la media de \textit{P2} $\pm$ su desviación entre particiones. Un preprocesado cuya media cae dentro de la banda no se distingue de \textit{P2}. En la fase 1 casi todos los puntos caen dentro de ella en las tres métricas, puesto que el F1-macro medio de los cinco modelos va de 0.609 (\textit{P3}) a 0.618 (\textit{P1}), una diferencia menor que la desviación entre particiones ($\approx 0{.}02$), y el AUC medio va de 0.809 a 0.814. Ningún preprocesado de limpieza cambia el rendimiento por sí solo, por lo que la elección se hizo con la tendencia de los cinco modelos y con el criterio clínico:
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{figuras/fase1_metricas.pdf}
+\caption{Fase 1: F1 macro, recall de alto riesgo y AUC ROC macro en validación (media $\pm$ desviación de las 3 particiones externas) de cada modelo con los preprocesados P0 a P4. La banda azul marca P2 $\pm$ su desviación.}
+\label{fig:fase1}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{P3 empeora a P2} (0.609 frente a 0.616), sobre todo en AdaBoost (-0.027). Eliminar del entrenamiento a los pacientes con PCR ultrasensible $>$ 10 mg/L no ayuda a detectar mejor el riesgo cardiovascular a pesar de la hipótesis inicial de que eliminar el ruido de los procesos inflamatorios agudos permitiría aislar un perfil de riesgo cardiovascular más puro.
+    \item \textbf{P4 no mejora a P2}: empeora a los dos modelos lineales en F1-macro (regresión logística de 0.656 a 0.641 y Linear SVC de 0.621 a 0.603) y en AUC (de 0.827 a 0.823 y de 0.797 a 0.791), y les sube el gap del F1 y del AUC, porque al agrupar edad e IMC pierden la relación continua con el riesgo. Construirlo sobre \textit{P3} tampoco cambia la conclusión (F1-macro medio 0.611).
+    \item \textit{P1} y \textit{P2} están empatados (0.618 y 0.616), pero P2 añade la recodificación clínica de 490 diabéticos no registrados, por lo que se eligió P2 como base de la fase 2.
+\end{itemize}
+
+Que la limpieza apenas mueva las métricas indica que los modelos, con imputación y regularización, ya son robustos frente al ruido detectado. Su valor está en que el modelo final aprende de datos clínicamente coherentes, algo imprescindible para poder aplicarlo a pacientes reales.
+
+\begin{table}[H]
+\caption{Fase 1: gaps entre entrenamiento y validación (media de las 3 particiones externas). En negrita, los superiores a 0.10}
+\label{tab:gaps1}
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{0.9}
+\begin{tabular}{|l|l|c|c|c|c|c|}
+\hline
+\textbf{Modelo} & \textbf{Gap} & \textbf{P0} & \textbf{P1} & \textbf{P2} & \textbf{P3} & \textbf{P4} \\
+\hline
+Regresión logística & F1 macro & 0{.}037 & 0{.}032 & 0{.}036 & 0{.}038 & 0{.}051 \\
+ & Recall alto & 0{.}075 & 0{.}092 & 0{.}093 & 0{.}091 & 0{.}080 \\
+ & AUC & 0{.}033 & 0{.}032 & 0{.}033 & 0{.}032 & 0{.}040 \\
+\hline
+Linear SVC & F1 macro & 0{.}008 & 0{.}019 & 0{.}018 & 0{.}022 & 0{.}046 \\
+ & Recall alto & 0{.}072 & 0{.}088 & 0{.}090 & 0{.}087 & \textbf{0{.}108} \\
+ & AUC & 0{.}027 & 0{.}026 & 0{.}028 & 0{.}026 & 0{.}039 \\
+\hline
+AdaBoost & F1 macro & 0{.}048 & 0{.}040 & 0{.}046 & 0{.}058 & 0{.}037 \\
+ & Recall alto & 0{.}086 & 0{.}080 & \textbf{0{.}130} & \textbf{0{.}105} & \textbf{0{.}118} \\
+ & AUC & 0{.}029 & 0{.}027 & 0{.}030 & 0{.}032 & 0{.}030 \\
+\hline
+Random Forest & F1 macro & 0{.}068 & 0{.}068 & 0{.}061 & 0{.}054 & 0{.}072 \\
+ & Recall alto & 0{.}083 & 0{.}098 & 0{.}093 & 0{.}069 & 0{.}080 \\
+ & AUC & 0{.}062 & 0{.}061 & 0{.}053 & 0{.}051 & 0{.}059 \\
+\hline
+HistGradientBoosting & F1 macro & 0{.}074 & 0{.}066 & 0{.}078 & 0{.}079 & 0{.}075 \\
+ & Recall alto & \textbf{0{.}114} & \textbf{0{.}101} & \textbf{0{.}111} & \textbf{0{.}106} & \textbf{0{.}116} \\
+ & AUC & 0{.}053 & 0{.}045 & 0{.}045 & 0{.}043 & 0{.}043 \\
+\hline
+\end{tabular}
+\end{table}
+
+En cuanto a los gaps (Tabla~\ref{tab:gaps1}), el del AUC separa claramente a las dos familias: es de unos 0.03 en los modelos lineales y AdaBoost y de 0.04 a 0.06 en Random Forest y HistGradientBoosting, los ensambles con más capacidad para memorizar. El gap del recall, en cambio, supera 0.10 en varias configuraciones cuyo gap de F1-macro es bajo (AdaBoost con \textit{P2} es 0.046 de F1-macro y 0.130 de recall), lo que confirma que es demasiado ruidoso para usarlo como restricción.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{figuras/fase2_metricas.pdf}
+\caption{Fase 2: F1 macro, recall de alto riesgo y AUC ROC macro en validación (media $\pm$ desviación de las 3 particiones externas) de cada modelo con P2 y con los preprocesados que parten de él (P5, P6 y P7). La banda azul marca P2 $\pm$ su desviación.}
+\label{fig:fase2}
+\end{figure}
+
+\begin{table}[H]
+\caption{Fase 2: gaps entre entrenamiento y validación (media de las 3 particiones externas). En negrita, los superiores a 0.10}
+\label{tab:gaps2}
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{0.9}
+\begin{tabular}{|l|l|c|c|c|c|}
+\hline
+\textbf{Modelo} & \textbf{Gap} & \textbf{P2} & \textbf{P5} & \textbf{P6} & \textbf{P7} \\
+\hline
+Regresión logística & F1 macro & 0{.}036 & 0{.}041 & 0{.}038 & 0{.}045 \\
+ & Recall alto & 0{.}093 & 0{.}095 & 0{.}089 & \textbf{0{.}105} \\
+ & AUC & 0{.}033 & 0{.}033 & 0{.}033 & 0{.}033 \\
+\hline
+Linear SVC & F1 macro & 0{.}018 & 0{.}024 & 0{.}036 & 0{.}036 \\
+ & Recall alto & 0{.}090 & 0{.}075 & 0{.}079 & 0{.}093 \\
+ & AUC & 0{.}028 & 0{.}027 & 0{.}034 & 0{.}032 \\
+\hline
+AdaBoost & F1 macro & 0{.}046 & \textbf{0{.}133} & \textbf{0{.}150} & 0{.}048 \\
+ & Recall alto & \textbf{0{.}130} & \textbf{0{.}204} & \textbf{0{.}243} & \textbf{0{.}113} \\
+ & AUC & 0{.}030 & 0{.}083 & 0{.}084 & 0{.}037 \\
+\hline
+Random Forest & F1 macro & 0{.}061 & 0{.}044 & 0{.}079 & 0{.}055 \\
+ & Recall alto & 0{.}093 & 0{.}086 & 0{.}094 & \textbf{0{.}105} \\
+ & AUC & 0{.}053 & 0{.}046 & 0{.}069 & 0{.}063 \\
+\hline
+HistGradientBoosting & F1 macro & 0{.}078 & 0{.}049 & 0{.}081 & 0{.}076 \\
+ & Recall alto & \textbf{0{.}111} & 0{.}087 & 0{.}091 & \textbf{0{.}133} \\
+ & AUC & 0{.}045 & 0{.}041 & 0{.}044 & 0{.}052 \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Fase 2: desbalanceo y selección de variables}
+
+La Fig.~\ref{fig:fase2} y la Tabla~\ref{tab:gaps2} recogen la comparación de \textit{P2} frente a \textit{P5}, \textit{P6} y \textit{P7}. En la fase 2 no hay un preprocesado que sea el mejor para todos los modelos:
+
+\begin{itemize}
+    \item \textit{SMOTENC (P5)} reduce el sobreajuste de los ensambles con el mismo F1-macro. HistGradientBoosting pasa de un gap de 0.078 a 0.049 y Random Forest de 0.061 a 0.044. Los pacientes sintéticos rellenan la región de las clases minoritarias y los árboles no pueden aislar casos concretos. A cambio, ambos pierden algo de recall de alto riesgo (de 0.747 a 0.722 y de 0.793 a 0.735).
+    \item El sobremuestreo aleatorio (\textit{P6}) sube el gap de los árboles (Random Forest 0.079, HistGradientBoosting 0.081). Al duplicar pacientes reales, los árboles los memorizan. En Random Forest también sube el gap del AUC (de 0.053 a 0.069).
+    \item En AdaBoost, ambos sobremuestreos suben el F1-macro (0.643 y 0.650) y el AUC (0.825 y 0.824), pero los tres gaps se disparan (F1-macro de 0.133 y 0.150, recall de 0.204 y 0.243 y AUC de 0.083 y 0.084), por lo que quedan excluidos sin un ajuste fino adicional.
+    \item Los modelos lineales apenas cambian en F1-macro porque ya compensaban el desbalanceo con \textit{class\_weight}. De hecho, con sobremuestreo la búsqueda interna elige \textit{class\_weight} = None. Linear SVC, sin embargo, pierde AUC con los dos sobremuestreos (de 0.797 a 0.768).
+    \item La selección de variables (\textit{P7}) empeora a los cinco modelos en F1-macro (entre -0.02 y -0.04) y en AUC (entre -0.016 y -0.027) y a cuatro de ellos también en recall de alto riesgo, por lo que, aunque el SFS descarta algunas variables, eliminarlas empeora los resultados y se conservan todas.
+\end{itemize}
+
+El ajuste fino aislado consiguió que AdaBoost con \textit{P5} entrara en el umbral de sobreajuste (F1-macro 0.630 con gap 0.086 o 0.615 con gap 0.037 con hojas de 100 a 150 pacientes). En cambio, HistGradientBoosting sin \textit{SMOTENC} no bajó de un gap de 0.067, y Random Forest con P2 y hojas de 60 alcanzó el mayor recall de alto riesgo de todo el estudio (0.827), pero con un F1 de solo 0.575.
+
+\subsection{Selección del modelo final}
+
+La Tabla~\ref{tab:finalistas} recoge las dos mejores configuraciones de cada familia que cumplen la restricción de gap. Como en las fases anteriores, el gap del recall supera 0.10 en algunas configuraciones con un gap de F1-macro aceptable (AdaBoost con el ajuste fino 1, 0.142), lo que confirma su ruido. Dentro de cada familia, la diferencia de F1-macro entre las dos es menor que la desviación entre particiones, pero no su comportamiento. La segunda opción suele cambiar F1-macro por gap o por recall. En AdaBoost, la configuración con más F1 tiene más del doble de gap (0.086 frente a 0.037) y menos recall de alto riesgo (0.571 frente a 0.611), en Random Forest, \textit{P6} tiene casi el doble de gap que \textit{P5} (0.079 frente a 0.044), pero detecta más pacientes de alto riesgo (0.790 frente a 0.735), y en HistGradientBoosting \textit{P2} tiene más gap que \textit{P5} (0.078 frente a 0.049), pero más recall (0.747 frente a 0.722) y el mayor AUC del panel (0.837). En cambio, las dos variantes de la regresión logística y de Linear SVC son prácticamente equivalentes, lo que refleja su estabilidad frente al preprocesado. El gap del AUC sigue el mismo patrón: unos 0.03 en los modelos lineales y entre 0.03 y 0.07 en los ensambles, con los valores más altos en Random Forest. La regresión logística con P2 obtiene el mayor F1 macro (0.656 $\pm$ 0.017) y uno de los mayores AUC (0.827), con un gap de solo 0.036. Su ventaja sobre el mejor ensamble con gap bajo (HistGradientBoosting con P5, 0.629) es de 0.027, superior a la desviación entre particiones, mientras que las variantes de la propia regresión logística con \textit{P5} o \textit{P6} no la mejoran. Linear SVC y Random Forest detectan algo más de pacientes de alto riesgo (0.765 y 0.790), pero a costa de un F1-macro claramente inferior, es decir, de muchas más falsas alarmas y peor separación de las clases baja y moderada. Por lo tanto, se seleccionó la regresión logística con \textit{P2} como modelo final.
+
+\begin{table}[!htb]
+\caption{Las dos mejores configuraciones de cada familia con gap de F1 $\leq 0{.}10$ (validación, media $\pm$ desviación típica; los gaps son la media de las 3 particiones). En negrita, el mejor valor de cada columna; en la del gap del recall, los superiores a 0.10}
+\label{tab:finalistas}
+\centering
+\small
+\begin{tabular}{|l|c|c|c|c|c|c|c|}
+\hline
+\textbf{Modelo} & \textbf{Preproc.} & \textbf{F1 macro} & \textbf{Gap F1} & \textbf{Recall alto} & \textbf{Gap recall} & \textbf{AUC} & \textbf{Gap AUC} \\
+\hline
+\textbf{Regresión logística} & \textbf{P2} & \textbf{0.656 $\pm$ 0.017} & 0.036 & 0.713 $\pm$ 0.070 & 0.093 & 0.827 & 0.033 \\
+Regresión logística & P6 & 0.650 $\pm$ 0.013 & 0.038 & 0.716 $\pm$ 0.074 & 0.089 & 0.824 & 0.033 \\
+\hline
+AdaBoost (ajuste fino 1) & P5 & 0.630 $\pm$ 0.017 & 0.086 & 0.571 $\pm$ 0.056 & \textbf{0.142} & 0.824 & 0.053 \\
+AdaBoost (ajuste fino 3) & P5 & 0.615 $\pm$ 0.027 & 0.037 & 0.611 $\pm$ 0.064 & 0.086 & 0.815 & 0.030 \\
+\hline
+HistGradientBoosting & P5 & 0.629 $\pm$ 0.017 & 0.049 & 0.722 $\pm$ 0.100 & 0.087 & 0.823 & 0.041 \\
+HistGradientBoosting & P2 & 0.624 $\pm$ 0.015 & 0.078 & 0.747 $\pm$ 0.093 & \textbf{0.111} & \textbf{0.837} & 0.045 \\
+\hline
+Linear SVC & P2 & 0.621 $\pm$ 0.006 & \textbf{0.018} & 0.765 $\pm$ 0.068 & 0.090 & 0.797 & 0.028 \\
+Linear SVC & P5 & 0.613 $\pm$ 0.004 & 0.024 & 0.759 $\pm$ 0.048 & 0.075 & 0.768 & \textbf{0.027} \\
+\hline
+Random Forest & P6 & 0.603 $\pm$ 0.028 & 0.079 & \textbf{0.790 $\pm$ 0.051} & 0.094 & 0.811 & 0.069 \\
+Random Forest & P5 & 0.602 $\pm$ 0.029 & 0.044 & 0.735 $\pm$ 0.070 & 0.086 & 0.803 & 0.046 \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Evaluación en test}
+
+El modelo elegido se reentrenó con todo el entrenamiento (1799 pacientes), donde la búsqueda interna (\textit{GridSearchCV} mediante validación cruzada de 3 particiones) determinó los hiperparámetros óptimos como \textit{C=0.1} y \textit{class\_weight = balanced}. Se evaluó una sola vez sobre los 451 pacientes de test, el cual fue sometido exactamente al mismo protocolo de preprocesado y transformación definido de \textit{P2} para que los datos de entrada tengan exactamente el mismo formato y dimensiones que los utilizados durante el aprendizaje. Obtuvo un F1-macro de 0.654 (0.679 en entrenamiento, gap de 0.025), un recall de alto riesgo de 0.767 (0.790 en entrenamiento) y un AUC de 0.810. El F1-macro de test es prácticamente igual al estimado en validación (0.656), lo que confirma que el esquema de validación anidada estimó correctamente el comportamiento del modelo con pacientes nuevos y que no hay sobreajuste en la decisión final. El AUC es más modesto, ya que queda 0.017 por debajo del de validación (0.827 $\pm$ 0.010) y su gap respecto al entrenamiento (0.853) es de 0.042, mayor que el del F1-macro (0.025) y el del recall (0.023). Un AUC de 0.81 indica una capacidad de discriminación moderada.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figuras/test_confusion_auc.pdf}
+\caption{Regresión logística con P2 en test. (a) Matriz de confusión (porcentajes sobre la clase real). (b) AUC uno contra resto de cada clase en entrenamiento (círculo vacío) y en test (círculo relleno), con su gap.}
+\label{fig:test}
+\end{figure}
+
+La matriz de confusión (Fig.~\ref{fig:test}a) muestra que el modelo detecta 69 de los 90 pacientes de alto riesgo. De los 21 no detectados, 19 se clasifican como riesgo moderado y solo 2 como riesgo bajo, de modo que el error más grave (un paciente de alto riesgo enviado a seguimiento de bajo riesgo) afecta al 2\% de esta clase. El F1 por clase es de 0.775 en riesgo bajo, 0.708 en riesgo alto y 0.479 en riesgo moderado, mostrando que la clase intermedia es la más difícil de separar, con un 33\% de sus pacientes clasificados como de bajo riesgo y un 21\% como de alto riesgo, ya que se solapa biológicamente con las dos clases vecinas.
+
+El AUC por clase (Fig.~\ref{fig:test}b) explica de dónde viene el gap del AUC global. El riesgo alto se separa muy bien y de forma estable (0.917 en test, con un gap de solo 0.011), y el riesgo bajo de forma aceptable (0.858, gap 0.030). La clase moderada, en cambio, tiene el AUC más bajo (0.656, una discriminación débil) y el mayor gap (0.086), casi tres veces el de la clase baja (lo poco que el modelo aprende a separar de esta clase en el entrenamiento no se mantiene con pacientes nuevos).
+
+\section{Discusión y conclusiones}
+
+El modelo recomendado es la regresión logística con el preprocesado \textit{P2} (con saneamiento de datos y recodificación de la diabetes) y \textit{C=0.1} y \textit{class\_weight = balanced} de hiperparámetros óptimos. Desde el punto de vista cuantitativo, es el mejor modelo del panel en F1-macro en validación, con un AUC a solo 0.01 del mejor y con un recall alto de 0.713. En el test mantiene un F1-macro estimado (0.654), con un recall de alto riesgo de 0.767 y un AUC de 0.810.
+
+El análisis del AUC por clase matiza este resultado y explica la principal limitación del modelo. El sobreajuste que queda, visible en el gap del AUC (0.042), se concentra en la clase moderada (AUC 0.656, gap 0.086), mientras que la de alto riesgo, la clínicamente crítica, apenas tiene gap (0.011). La clase moderada se solapa con las otras dos y es, muy probablemente, la responsable del techo de rendimiento que comparten todos los modelos y preprocesados (F1 macro entre 0.60 y 0.66). Como ni el modelo ni el preprocesado mueven ese techo, todo apunta a un límite de los propios datos más que de los algoritmos.
+
+Por ello, el uso más adecuado del modelo es el de identificar a los pacientes de alto riesgo, que es donde mejor ordena (AUC 0.917). Su recall en esta clase es de 0.767, pero cuando se equivoca casi siempre clasifica al paciente como de riesgo moderado (19 de los 21 fallos) y solo 2 como de riesgo bajo. Así, 88 de los 90 pacientes de alto riesgo del test (97.8\%) quedan clasificados como de riesgo moderado o alto y no se descartaron. Este razonamiento supone que un paciente clasificado como de riesgo moderado recibe seguimiento clínico y no el alta. En cambio, el modelo no distingue con fiabilidad el riesgo moderado, por lo que los pacientes clasificados en esa categoría necesitarían una valoración clínica adicional.
+
+Desde el punto de vista cualitativo, es el modelo más sencillo del panel (un coeficiente por variable y clase), se entrena en milisegundos y no necesita sobremuestreo. Los ensambles, con cientos de árboles, no aportan mejora, incluso HistGradientBoosting con tocones, que es aditivo como la regresión logística, queda por debajo. Esto sugiere que la relación entre las variables y el riesgo es esencialmente aditiva y monótona y que la complejidad adicional solo sirve para memorizar ruido. Además, tiene gaps reducidos en validación (0.036 de F1-macro y 0.033 de AUC) y en test, una desviación baja entre particiones y un F1-macro de test que coincide con el de validación. Los ensambles, en cambio, necesitaron una regularización muy fuerte para controlar el sobreajuste, tienen en general un gap de AUC mayor (hasta 0.07) y siguen siendo más sensibles a la partición.
+
+Desde un punto de vista crítico, hay que tener en cuenta varias limitaciones. El test contiene solo 90 pacientes de alto riesgo y 135 de riesgo moderado, por lo que cada paciente de alto riesgo mueve el recall en algo más de 0.01 y su valor podría cambiar de forma apreciable con otra muestra de pacientes; del mismo modo, el análisis del AUC por clase, hecho solo con el modelo final, debe tomarse como una tendencia y no como un resultado definitivo. Además, aunque casi todos los pacientes de alto riesgo no detectados quedan en seguimiento de riesgo moderado, uno de cada cuatro no se identifica como de alto riesgo, lo que todavía no es suficiente para un triaje clínico real sin supervisión médica.
+
+Como posibles mejoras, se proponen ajustar el umbral de decisión de la clase de alto riesgo para priorizar el recall, aprovechando que esta clase tiene un AUC alto (0.917) y eligiendo el punto de trabajo con el equipo médico, siempre con nuevos datos y no con el test de este estudio, para que siga siendo independiente; aprovechar el carácter ordinal del riesgo con modelos de regresión ordinal, que podrían separar mejor la clase intermedia; transformar la PCR de forma no lineal, ya que el EDA mostró un efecto umbral a partir de 1 mg/L que un término lineal no puede representar; aumentar el número de repeticiones de la validación externa para aplicar test estadísticos con suficiente potencia; y validar el modelo con una cohorte externa de otro centro antes de su uso clínico.
+
+\nocite{*}
+\bibliographystyle{IEEEtran}
+\bibliography{referencias}
+
+\end{document}
+
+
+
+
+
+
