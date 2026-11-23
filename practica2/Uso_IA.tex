@@ -1,0 +1,108 @@
+\documentclass[12pt,a4paper,oneside]{book}
+\usepackage{graphicx}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{listings}
+\usepackage{tcolorbox}
+\usepackage{hyperref}
+\usepackage{fancyvrb}
+\usepackage{verbatim}
+\usepackage{fvextra}
+\usepackage{xurl}
+\tcbuselibrary{skins,breakable}
+\usepackage{ucs}
+\usepackage[utf8x]{inputenc}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{fancyhdr}
+\usepackage{parskip}
+\usepackage{microtype}
+\hyphenpenalty=10000
+\exhyphenpenalty=10000
+\sloppy
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\scriptsize,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{teal},
+    breaklines=true,
+    showstringspaces=false,
+    frame=single,
+    backgroundcolor=\color{gray!5}
+}
+
+\newtcolorbox{iaprompt}{
+    colback=gray!10,
+    colframe=gray!50!black,
+    fonttitle=\bfseries,
+    title=Prompt,
+    boxrule=0.5mm,
+    arc=2mm,
+    width=\textwidth,
+    breakable
+}
+
+\newtcolorbox{iaresp}[1]{
+    colback=blue!5!white,
+    colframe=blue!40!black,
+    fonttitle=\bfseries,
+    title={Respuesta IA \hfill \normalfont\normalsize\mdseries \texttt{#1}},
+    boxrule=0.5mm,
+    arc=2mm,
+    width=\textwidth,
+    breakable
+}
+
+\newtcolorbox{iaanalisis}{
+    colback=orange!10,
+    colframe=orange!60!black,
+    fonttitle=\bfseries,
+    title=Análisis,
+    boxrule=0.5mm,
+    arc=2mm,
+    width=\textwidth,
+    breakable
+}
+
+\title{Prompts y respuestas IA}
+\author{Álvaro Arcís Reverte y Alejandro Nicolás Navarro} 
+\date{Máster Universitario en Inteligencia Artificial \\ Curso 2026--2027}
+
+
+\begin{document}
+
+\maketitle
+
+\cleardoublepage
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+
+\end{iaanalisis}
+
+
+
+
+
+
+
+\end{document}
