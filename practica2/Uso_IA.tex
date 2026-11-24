@@ -87,10 +87,453 @@
 
 \begin{iaprompt}
 \begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+2021-01-01 00:00:00+01:00
+
+En qué formato está esto y cómo se lee?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash-Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Está en formato **ISO 8601** (con un espacio en lugar de la letra `T` separando la fecha y la hora, muy común en bases de datos SQL o Python).
+
+Se lee de izquierda a derecha, yendo de la unidad de tiempo más grande a la más pequeña, más el desplazamiento horario al final:
+
+* **`2021-01-01`** → **Fecha (Año-Mes-Día):** 1 de enero de 2021.
+* **`00:00:00`** → **Hora (Horas:Minutos:Segundos):** 00 horas, 00 minutos, 00 segundos (es decir, medianoche, el instante exacto en que empieza ese día).
+* **`+01:00`** → **Zona horaria (Desfase respecto a UTC):** Indica que esa hora está una hora por delante del Tiempo Universal Coordinado (UTC+1). Por ejemplo, corresponde al horario de invierno en España peninsular o Europa Central (CET).
+
+**En resumen:** Representa las **12:00 de la noche del 1 de enero de 2021** en una zona horaria UTC+1 (lo que equivale a las 23:00 del 31 de diciembre de 2020 en UTC).
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+La IA describe correctamente la fecha y explica cómo interpretar correctamente el desfase respecto al tiempo universal coordinado y cómo se corregiría al pasarlo a tiempo universal coordinado, que iba a ser la siguiente consulta.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Tengo un dataset df_horario con estas variables:
+
+Variable Descripción demanda_real Unidad Demanda eléctrica medida, media de la
+hora demanda_prevista MW Demanda prevista por REE, media de la hora
+demanda_programada MW Demanda programada por REE, media de la hora precio_spot
+MW Precio del mercado diario de electricidad pvpc €/MWh Precio voluntario para
+el pequeño consumidor €/MWh
+
+Y una variable extra fecha_hora (hora peninsular y su desfase respecto a UTC)
+con entradas de tipo 2021-01-01 00:00:00+01:00, pero está como object en vez de
+datetime. Cómo realizo la conversión? Y debería arreglar el desfase o eso lo
+hacemos después para no duplicar datos? O se hace eso precisamente para ver
+duplicados y ver qué hacer?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aquí tienes la respuesta a tus preguntas, explicada paso a paso y adaptada a
+cómo funciona el mercado eléctrico español (REE).
+
+1. ¿Cómo realizo la conversión a datetime?
+
+La forma más directa y eficiente en pandas es usar pd.to_datetime():
+
+import pandas as pd
+
+# Convertir directamente
+df_horario['fecha_hora'] = pd.to_datetime(df_horario['fecha_hora'])
+
+Sin embargo, dado que tienes datos con distintos desfases (+01:00 en invierno y
++02:00 en verano), lo más recomendable es estandarizar a UTC en la propia
+conversión para que pandas cree un índice temporal continuo y sin ambigüedades:
+
+df_horario['fecha_hora'] = pd.to_datetime(df_horario['fecha_hora'], utc=True)
+
+2. ¿Debo arreglar el desfase ahora o después? ¿Se hace para ver duplicados?
+
+Debes gestionarlo AHORA, no después. El desfase no es un "error", es la
+información que te salva la vida con los duplicados.
+
+En el sector eléctrico español ocurre lo siguiente:
+
+  - En marzo (cambio a horario de verano), el día tiene 23 horas (a las 02:00
+    pasan a ser las 03:00).
+  - En octubre (cambio a horario de invierno), el día tiene 25 horas (a
+    las 03:00 vuelven a ser las 02:00).
+
+El peligro de quitar el desfase antes de tiempo:
+
+Si simplemente eliminas el +01:00 / +02:00 y dejas la hora local "a secas":
+
+  - En octubre tendrás dos registros a las 02:00:00. Parecerán un duplicado
+    cuando en realidad son dos horas físicas distintas (la primera ocurrió en
+    +02:00 y la segunda en +01:00).
+  - Si limpias duplicados sin el desfase, borrarás una hora real de demanda y
+    precio.
+
+3. Flujo de trabajo recomendado (Mejor práctica)
+
+Para series temporales de energía, el estándar de la industria es trabajar en
+UTC:
+
+Opción A: Trabajar en UTC (Recomendada para análisis y modelos)
+
+En UTC no hay cambios de hora; todos los días tienen 24 horas exactas y nunca
+hay solapamientos.
+
+# 1. Convertir a datetime en UTC
+df_horario['fecha_hora'] = pd.to_datetime(df_horario['fecha_hora'], utc=True)
+
+# 2. Comprobar si hay duplicados REALES (ahora sí es seguro)
+duplicados = df_horario[df_horario.duplicated(subset=['fecha_hora'], keep=False)]
+print(f"Duplicados encontrados: {len(duplicados)}")
+
+# 3. Establecer como índice y ordenar
+df_horario = df_horario.sort_values('fecha_hora').set_index('fecha_hora')
+
+Opción B: Si necesitas conservar la hora peninsular exacta (Europe/Madrid)
+
+Si necesitas analizar hábitos de consumo (donde la gente come a las 14:00 tanto
+en invierno como en verano):
+
+# 1. Convertir a UTC primero y luego localizar a Madrid
+df_horario['fecha_hora'] = pd.to_datetime(df_horario['fecha_hora'], utc=True).dt.tz_convert('Europe/Madrid')
+
+# Ahora la columna sabe cuándo es +01:00 y cuándo es +02:00 automáticamente
+
+Resumen
+
+1.  Convierte a datetime usando utc=True.
+2.  No elimines el desfase; conviértelo a UTC o a la zona horaria Europe/Madrid.
+3.  Busca duplicados después de este paso: cualquier duplicado que encuentres en
+    UTC será un error real de datos y no un efecto del cambio de hora de
+    octubre.
+
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+La IA responde adecuadamente sobre cómo hacer la conversión con pandas, además de que ofrece la opción de dejarlo en UCT o en horario de Madrid, opción que se prefiere para que el análisis de los datos sea más sencillo y concuerde con los horarios de la sociedad. También indica que se debe de tratar el desfase ya. Sin embargo, antes de realizar esto, conviene analizar si realmente todos los datos vienen con este formato.
+\end{iaanalisis}
+
+
+
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+antes de hacer conversión, no convendría comprobar si en mi dataset se cumple
+realmente esto en fecha_hora? me refiero al formato
 
 \end{Verbatim}
 \end{iaprompt}
 \begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Totalmente de acuerdo. Es una excelente práctica de ingeniería de datos. En
+datos del mundo real (y más los que vienen de APIs o scraping como los del
+sector eléctrico), asumir que el 100% de las filas tienen el formato perfecto
+suele ser fuente de errores silenciosos.
+
+Aquí tienes 4 comprobaciones rápidas que deberías hacer antes de convertir:
+
+1. Comprobar si hay nulos o valores vacíos
+
+Lo primero es saber si faltan datos en esa columna:
+
+nulos = df_horario['fecha_hora'].isna().sum()
+print(f"Valores nulos: {nulos}")
+
+2. Comprobar la longitud de las cadenas
+
+Si el formato es 2021-01-01 00:00:00+01:00, todas las cadenas deben tener
+exactamente 25 caracteres. Si hay longitudes distintas, hay formatos mezclados:
+
+# Ver si todas las cadenas miden 25 caracteres
+df_horario['fecha_hora'].astype(str).str.len().value_counts()
+
+Si ves números distintos a 25, significa que hay fechas incompletas (por
+ejemplo, sin segundos o sin desfase).
+
+3. Inspeccionar los desfases horarios (Offsets)
+
+En la península española solo deberían existir dos desfases: +01:00 (invierno) y
++02:00 (verano). Puedes mirar los últimos 6 caracteres para ver qué tipos de
+desfase tienes:
+
+# Ver qué desfases existen en el dataset
+df_horario['fecha_hora'].astype(str).str[-6:].value_counts()
+
+¿Qué buscar aquí?
+
+  - Lo normal: registros con +01:00 y +02:00.
+  - Cosas raras a vigilar: +00:00 (¿se coló hora de Canarias o UTC puro?), Z, o
+    que termine en los segundos (ej: :00), lo que indicaría que a esa fila le
+    falta el desfase.
+
+4. La "prueba de fuego": Conversión segura con errors='coerce'
+
+Pandas te permite intentar la conversión de forma segura. Si alguna fila tiene
+un formato roto, en vez de lanzar un error que pare el programa, le asigna NaT
+(Not a Time). Así puedes aislar exactamente qué filas fallan:
+
+# Prueba temporal de conversión
+fechas_test = pd.to_datetime(df_horario['fecha_hora'], errors='coerce', utc=True)
+
+# Filas que no cumplieron el formato esperado
+filas_problematicas = df_horario[fechas_test.isna() & df_horario['fecha_hora'].notna()]
+
+if len(filas_problematicas) > 0:
+    print(f"¡Alerta! Hay {len(filas_problematicas)} filas con formato inválido:")
+    print(filas_problematicas['fecha_hora'].head())
+else:
+    print("¡Perfecto! Todas las filas son convertibles.")
+
+Si este último bloque te dice que hay 0 problemas, ya puedes hacer la conversión
+definitiva con total tranquilidad.
+
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se lanza la consulta en forma de pregunta para confirmar si la idea de realizar un estudio antes de realizar la conversión era conveniente, aunque se tenía bastante certeza de que se debía hacer. En cuanto a la respuesta, en el notebook ya se había verificado valores ausentes, pero añade otras comprobaciones útiles como comprobar los tipos de desfase o el número de caracteres que no se hubiesen hecho explícitamente. Además, añade una comprobación muy interesante, la conversión segura, para poder comprobar directamente si se puede realizar una conversión de los datos o no, en vez de estar realizando, por ejemplo, expresiones regulares para comprobar el formato.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+el desfase +01:00 o +02:00, cuál representa cada uno?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash-Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+En España (hora peninsular), +01:00 representa el horario de invierno y +02:00 representa el horario de verano.
+Ambos indican cuántas horas está adelantada la hora local respecto al Tiempo Universal Coordinado (UTC):
+• +01:00 (CET - Hora Central Europea): Es el horario estándar o de invierno. Se aplica desde el último domingo de octubre hasta el último domingo de marzo.
+• +02:00 (CEST - Hora de Verano Central Europea): Es el horario de verano (cuando se adelanta el reloj una hora). Se aplica desde el último domingo de marzo hasta el último domingo de octubre.
+Nota: En las Islas Canarias, al ir una hora por detrás de la península, estos desfases son Z / +00:00 en invierno y +01:00 en verano.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Para poder indicarlo correctamente en el notebook. Además, indica que las Islas Canarias tendrían desfases en +00:00 y +01:00, lo que indica que no aparecen datos de las Islas Canarias en el dataset de horario.
+\end{iaanalisis}
+
+
+
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+No hay problemas. Necesito ahora comprobar si hay fechas ausentes temporales,
+para que no tenga días con menos horas o por si hay días que no están
+registrados. Ya he ordenado las fechas.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+La forma más robusta y estándar en pandas para detectar huecos temporales (horas
+sueltas o días enteros que falten) es comparar tus datos contra un calendario
+teórico perfecto.
+
+Aquí tienes los dos métodos más efectivos:
+
+Método 1: Detectar saltos temporales con .diff() (El más rápido)
+
+Si tus datos están ordenados, la diferencia entre una fila y la anterior debe
+ser exactamente de 1 hora. Si la resta da más de 1 hora, significa que ahí hay
+un hueco.
+
+# 1. Calculamos la diferencia de tiempo entre cada fila y la anterior
+diferencias = df_horario['fecha_hora'].diff()
+
+# 2. Filtramos donde el salto sea mayor a 1 hora
+huecos = df_horario[diferencias > pd.Timedelta(hours=1)].copy()
+
+# Añadimos información de cuánto duró el salto
+huecos['salto_horas'] = diferencias[diferencias > pd.Timedelta(hours=1)]
+
+if len(huecos) == 0:
+    print("¡Perfecto! No hay ningún hueco temporal. La serie es continua.")
+else:
+    print(f"Se han encontrado {len(huecos)} discontinuidades:")
+    # Muestra la fecha donde reaparecen los datos y cuántas horas se perdieron
+    print(huecos[['fecha_hora', 'salto_horas']])
+
+Método 2: Obtener la lista exacta de horas ausentes (El más preciso)
+
+Este método genera una secuencia horaria ideal desde tu primera fecha hasta la
+última y comprueba cuáles faltan exactamente:
+
+# 1. Crear el rango teórico continuo ideal (de la primera a la última fecha)
+rango_ideal = pd.date_range(
+    start=df_horario['fecha_hora'].min(),
+    end=df_horario['fecha_hora'].max(),
+    freq='1h' # Frecuencia horaria (puedes usar 'h' o '1h')
+)
+
+# 2. Encontrar qué horas del rango ideal NO están en tu dataset
+horas_faltantes = rango_ideal.difference(df_horario['fecha_hora'])
+
+print(f"Total de horas ausentes: {len(horas_faltantes)}")
+
+if len(horas_faltantes) > 0:
+    print("\nPrimeras 10 horas que faltan:")
+    print(horas_faltantes[:10])
+
+Método 3: Resumen a nivel de días (¿Hay días incompletos?)
+
+Si quieres ver rápidamente qué días tienen menos de 24 registros:
+
+(Nota: Esto asume que convertiste a UTC. Si estás en hora local peninsular,
+recuerda que el día de cambio a horario de verano tiene 23 horas y el de
+invierno 25 de forma natural).
+
+# Contar registros por día natural
+conteo_por_dia = df_horario.groupby(df_horario['fecha_hora'].dt.date).size()
+
+# Días con menos de 24 horas
+dias_incompletos = conteo_por_dia[conteo_por_dia < 24]
+
+if len(dias_incompletos) == 0:
+    print("Todos los días registrados tienen 24 horas.")
+else:
+    print(f"Hay {len(dias_incompletos)} días incompletos:")
+    print(dias_incompletos)
+
+¿Qué hacer si encuentras huecos?
+
+Si te faltan horas/días, para series temporales de demanda y precio se suele:
+
+1.  Reindexar el dataframe con el rango_ideal (las horas que faltaban se
+    llenarán con NaN).
+2.  Imputar los nulos según el caso:
+      - Huecos de 1 o 2 horas: Suele usarse interpolación lineal
+        (df.interpolate(method='time')).
+      - Días enteros ausentes: Se suele sustituir por el mismo día de la semana
+        anterior (por ejemplo, rellenar el martes perdido con los datos del
+        martes previo), ya que el consumo eléctrico es fuertemente estacional
+        semanalmente.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Los métodos son correctos. Se elige el método 2, ya que generar una secuencia horaria y compararla con la que se tiene en \textit{fecha\_hora} es la comprobación más intuitiva que suele venir a la mente. Como también se busca saber, además del número de huecos temporales en horas, qué días contienen dichos huecos, por lo que también se acepta el método 3. Sin embargo, se cambia $\le 24$ por !=24 para comprobar por si hubiese días con más de 24 horas.
+\end{iaanalisis}
+
+
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Hay 0 fechas duplicadas.
+
+Hay 0 horas faltantes en el rango temporal.
+
+Hay 6 días incompletos: 2021-03-28: 23 horas registradas 2021-10-31: 25 horas
+registradas 2022-03-27: 23 horas registradas 2022-10-30: 25 horas registradas
+2023-03-26: 23 horas registradas 2023-10-29: 25 horas registradas
+
+Primer registro: 2021-01-01 00:00:00+01:00 Último
+registro: 2023-12-31 23:00:00+01:00
+
+Por qué han salido estos 6 días incompletos? No sale en la comprobación del
+método 2 que hay 0 huecos? No debería ser posible tener días así entonces
+
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+¡Buenas noticias! Tu dataset está perfecto al 100%. No hay ningún error ni
+inconsistencia.
+
+Lo que estás viendo es la prueba irrefutable de que tus datos son de altísima
+calidad y respetan la realidad física del tiempo.
+
+Te explico exactamente por qué ocurre esta aparente contradicción:
+
+1. ¿Qué son exactamente esas 6 fechas?
+
+Fíjate en los días marcados:
+
+  - 28 de marzo de 2021, 27 de marzo de 2022, 26 de marzo de 2023: Son el último
+    domingo de marzo. Es el cambio al horario de verano. A las 02:00 el reloj
+    salta a las 03:00. Ese día en España tiene, de forma real y oficial, 23
+    horas.
+  - 31 de octubre de 2021, 30 de octubre de 2022, 29 de octubre de 2023: Son el
+    último domingo de octubre. Es el cambio al horario de invierno. A las 03:00
+    el reloj vuelve a las 02:00. Ese día en España tiene, de forma real y
+    oficial, 25 horas.
+
+2. ¿Por qué el Método 2 dijo que había 0 huecos?
+
+Porque el Método 2 (pd.date_range(..., freq='1h')) mide horas físicas continuas.
+
+Como tus fechas tienen zona horaria (el +01:00 / +02:00), Pandas sabe
+perfectamente cómo funciona el tiempo en España:
+
+  - Sabe que en marzo la hora 02:00 local no existe (se la salta el reloj), por
+    lo que no la espera en el rango ideal.
+  - Sabe que en octubre la hora 02:00 se vive dos veces (primero como
+    02:00+02:00 y luego como 02:00+01:00).
+
+Para el Método 2 han pasado todas y cada una de las horas reales que el universo
+ha vivido entre 2021 y 2023. Por eso da 0 horas faltantes.
+
+3. ¿Por qué el Método 3 dijo que había días incompletos?
+
+Porque en el Método 3 usamos: df_horario['fecha_hora'].dt.date
+
+Al extraer la "fecha de calendario civil español", agrupamos todas las horas que
+cayeron en ese día del calendario:
+
+  - El domingo de marzo, el calendario español solo vio pasar 23 horas.
+  - El domingo de octubre, el calendario español vio pasar 25 horas.
+
+El código buscaba días con size < 24, y por eso saltaron exactamente esos 3
+domingos de marzo (y los 3 de octubre si hubieras puesto != 24).
+
+¿Cómo comprobarlo tú mismo?
+
+Si conviertes temporalmente a UTC puro y vuelves a contar por día, verás cómo el
+"problema" desaparece por completo (porque en UTC nunca hay cambio de hora y
+todos los días duran 24 horas exactas):
+
+# Convertimos la vista a UTC y agrupamos por día UTC
+conteo_utc = df_horario['fecha_hora'].dt.tz_convert('UTC').dt.date.value_counts()
+
+# Comprobamos si en UTC hay algún día que no tenga 24 horas:
+print("Días que no tienen 24 horas en UTC:", (conteo_utc != 24).sum())
+
+(El resultado será 0).
+
+Conclusión
+
+  - No tienes duplicados.
+  - No te falta ni una sola hora.
+  - Esos 6 días deben ser así si trabajas en hora peninsular española. Tu
+    dataset está completamente limpio y listo para analizar.
+
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+La consulta surge al no haber caído inicialmente en que esos días correspondían a los cambios de hora (verano e invierno). La respuesta de la IA resulta muy útil al aclarar esta aparente contradicción entre los métodos 2 y 3. Sin embargo, cuando se ejecuta el código de comprobación se encuentran 2 fechas incompletas, que coinciden con el primer día y último día de la serie. Simplemente es un pequeño error de la IA al no tener en cuenta el desplazamiento de la hora en los días extremos, pero no cambia la conclusión que se ha obtenido con el análisis y esta consulta, que es que no hay huecos temporales en la serie.
+\end{iaanalisis}
+
+
+
+
+
+
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash-Lite 3.5 en Gemini}
 \begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
 
 \end{Verbatim}
@@ -98,9 +541,6 @@
 \begin{iaanalisis}
 
 \end{iaanalisis}
-
-
-
 
 
 
