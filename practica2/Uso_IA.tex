@@ -521,10 +521,412 @@ La consulta surge al no haber caído inicialmente en que esos días correspondí
 \end{iaanalisis}
 
 
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Ya hay calculado el porcentaje total de valores nulos por columna en df_horario y veo que en demanda_real apenas es un 0.39%. ¿Con saber el porcentaje es suficiente para decidir cómo imputar o debería mirar algo más antes de pasar los datos a escala diaria?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+No, en series temporales el porcentaje global no es suficiente.
+
+Un 0.39% de nulos representa unas 102 horas. El impacto de esas 102 horas cambia radicalmente según cómo estén distribuidas:
+1. Si son horas sueltas repartidas al azar a lo largo de los 3 años, una interpolación lineal o spline funcionará de forma excelente sin alterar la dinámica de la serie.
+2. Si se concentran en bloques consecutivos largos (por ejemplo, 15 o 20 horas seguidas en un mismo día), rellenarlas o ignorarlas al agregar a nivel diario provocará distorsiones graves: si simplemente promedias o sumas las horas disponibles de ese día, el valor diario resultante estará completamente sesgado hacia la baja o hacia las horas valle.
+
+Por tanto, necesitas analizar la longitud y la fecha de los tramos o bloques consecutivos de nulos en cada columna antes de tomar cualquier decisión de agregación o imputación.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Me sirve para entender la importancia de donde están los nulos y no solo el porcentaje.
+\end{iaanalisis}
 
 
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+preparame una función en pandas para identificar los bloques consecutivos de valores nulos en una serie temporal horaria y ver para cada bloque cuándo empieza, cuándo acaba y cuántas horas dura. Quiero aplicarla a demanda_real, demanda_prevista, demanda_programada y pvpc.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+def bloques_nulos(serie, fechas):
+    """Devuelve los tramos consecutivos de nulos de una serie (inicio, fin y número de horas)."""
+    es_nulo = serie.isna()
+    id_bloque = (es_nulo != es_nulo.shift()).cumsum()[es_nulo]
+    return (pd.DataFrame({"fecha_hora": fechas[es_nulo], "bloque": id_bloque})
+              .groupby("bloque")["fecha_hora"].agg(inicio="min", fin="max", horas="size")
+              .reset_index(drop=True))
+
+for col in ["demanda_real", "demanda_prevista", "demanda_programada", "pvpc"]:
+    print(f"--- {col}")
+    print(bloques_nulos(df_horario[col], df_horario["fecha_hora"]).to_string(), "\n")
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+El uso del cambio de estado `(es_nulo != es_nulo.shift()).cumsum()` es una técnica vectorial muy eficiente en pandas para asignar un ID a rachas consecutivas de valores booleanos.
+\end{iaanalisis}
 
 
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Al ejecutar la función obtengo esto:
+- demanda_real: 6 bloques de exactamente 17 horas cada uno (de 04:00 a 20:00).
+- demanda_prevista y demanda_programada: 6 bloques de 18 horas (de 03:00 a 20:00), y solo coinciden con demanda_real el 2021-05-22.
+- pvpc: un único bloque ininterrumpido de 3623 horas del 2021-01-01 00:00 al 2021-05-31 22:00.
+
+¿Qué implicaciones metodológicas tienen estos resultados para el proyecto?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Estos patrones revelan que los nulos no son aleatorios (no son MCAR):
+
+1. En 'demanda_real': 17 horas perdidas entre las 04:00 y las 20:00 implican que se pierden justamente las horas punta y de actividad comercial/industrial del día, quedando solo la madrugada y la noche. Si agregas a diario calculando la media de las horas disponibles sin imputar, la demanda diaria de esos 6 días estará fuertemente sesgada a la baja. Debes imputar de forma horaria antes de agregar al nivel diario.
+
+2. En 'demanda_prevista' y 'demanda_programada': Salvo el 22 de mayo de 2021, en los otros cinco días con huecos en 'demanda_real' la previsión de REE sí está disponible. Esto ofrece una vía excelente para imputar la demanda real en esas fechas, dada la correlación habitual entre previsión y realidad.
+
+3. En 'pvpc': El hueco termina el 31 de mayo de 2021. El 1 de junio de 2021 entró en vigor en España la nueva tarifa 2.0TD (con tres periodos punta, llano y valle), lo que alteró por completo la fórmula y publicación del PVPC. Por tanto, es un hueco puramente estructural de 5 meses enteros. No tiene sentido imputarlo matemáticamente; habrá que descartar ese periodo inicial si se usa la variable o descartar el PVPC si se requiere todo el histórico de 3 años.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+La explicación me ayuda a contextualizar estos patrones de nulos y a decidir cómo tratarlos.
+\end{iaanalisis}
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Quiero graficar uno de esos huecos (por ejemplo el del 27 de julio de 2022) comparando demanda_real con demanda_prevista para ver cómo se comportan, y calcular el error relativo medio horario entre ambas para justificar si podemos usar demanda_prevista como base de imputacipn. Pasame el codigo
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+dia = "2022-07-27"
+tramo = df_horario[df_horario["fecha_hora"].dt.strftime("%Y-%m-%d").between("2022-07-26", "2022-07-28")]
+fig, ax = plt.subplots(figsize=(11, 3.5))
+ax.plot(tramo["fecha_hora"], tramo["demanda_prevista"], color=GRIS, ls="--", label="demanda_prevista")
+ax.plot(tramo["fecha_hora"], tramo["demanda_real"], color=AZUL, lw=2, label="demanda_real")
+ax.set_title(f"Ejemplo de hueco en demanda_real ({dia})")
+ax.set_ylabel("MW")
+ax.legend(frameon=False)
+fig.tight_layout()
+fig.savefig(FIG_DIR / "eda_hueco_demanda.png", bbox_inches="tight")
+plt.show()
+
+err = (df_horario["demanda_real"] - df_horario["demanda_prevista"]) / df_horario["demanda_real"]
+print(f"Error relativo horario de demanda_prevista: media {err.mean():.2%}, "
+      f"error absoluto medio {err.abs().mean():.2%}, máximo {err.abs().max():.2%}")
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+El código compara visual y numéricamente la fidelidad de la serie prevista de REE. Que nos ayudará a decidir si podemos usarla para imputar los huecos de demanda_real.
+\end{iaanalisis}
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+El error de demanda_prevista frente a demanda_real es de menos del 1%. Siendo tan precisa, ¿podría usar directamente demanda_prevista como variable predictora exógena en mis modelos de machine learning?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Debes tener mucho cuidado y separar dos conceptos:
+
+1. **Uso para imputación de datos históricos (Limpieza):** Sí es completamente válido y recomendable. Como la previsión de Red Eléctrica es un cálculo oficial altamente optimizado con datos en tiempo real, usarla para parchear esas 17 horas puntuales en el pasado reconstruye fielmente la señal real sin introducir sesgos.
+
+2. **Uso como variable de entrada en tu modelo:** Sería una trampa metodológica (data leakage / fuga de información) si tu objetivo es evaluar la capacidad predictiva de tu propio modelo sobre la demanda. Si le das a tu modelo la predicción oficial de REE que ya tiene un 99% de acierto, tu modelo solo aprenderá a copiarla trivialmente. Además, en un escenario real de predicción a 7 días vista (t+1 a t+7), la previsión horaria fina de REE a 7 días no está disponible en el momento t con esa precisión. Por tanto, sirve para limpiar el histórico, pero no debe ser un feature del modelo.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+La advertencia sobre la fuga de información es crucial y se tendrá en cuenta en el preprocesado.
+\end{iaanalisis}
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+paso ahora a analizar el otro dataset de generación diaria (df_generacion). Quiero convertir la columna fecha a formato datetime, ordenar cronológicamente y ver la estructura general con info(). Dame el código.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+df_generacion["fecha"] = pd.to_datetime(df_generacion["fecha"])
+df_generacion = df_generacion.sort_values("fecha").reset_index(drop=True)
+df_generacion.info()
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se hace la conversión ya que si no, no se podría realizar el análisis temporal.
+\end{iaanalisis}
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Necesito hacer varias comprobaciones de calidad sobre df_generacion como habia antes, hay q ver si hay fechas duplicadas o días ausentes en el rango, comprobar los valores de gen_fuel_gas porque parece casi vacía,detectar si hay valores negativos en las tecnologías de generación y cuántos son, comprobar si la columna gen_generación_total es exactamente la suma de las demás tecnologías.
+Dame el bloque de código para hacer lo q te he dicho.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+print(f"Fechas duplicadas: {df_generacion['fecha'].duplicated().sum()}")
+dias_faltan = pd.date_range(df_generacion["fecha"].min(), df_generacion["fecha"].max(), freq="D").difference(df_generacion["fecha"])
+print(f"Días ausentes: {len(dias_faltan)}  (rango {df_generacion['fecha'].min().date()} a {df_generacion['fecha'].max().date()})")
+
+print("\nValores no nulos de gen_fuel_gas:")
+print(df_generacion.loc[df_generacion["gen_fuel_gas"].notna(), ["fecha", "gen_fuel_gas"]].to_string(index=False))
+
+cols_gen = df_generacion.columns.drop("fecha")
+negativos = (df_generacion[cols_gen] < 0).sum()
+print("\nDías con generación negativa por tecnología:")
+print(pd.DataFrame({"dias": negativos, "minimo": df_generacion[cols_gen].min()})[negativos > 0])
+
+componentes = cols_gen.drop(["gen_generación_total", "gen_fuel_gas"])
+dif = (df_generacion[componentes].sum(axis=1) - df_generacion["gen_generación_total"]).abs().max()
+print(f"\nMáxima diferencia entre la suma de tecnologías y gen_generación_total: {dif:.6f} MWh")
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+El script confirma varios puntos clave: el calendario diario está completo (1095 días sin huecos), `gen_fuel_gas` contiene valores residuales despreciables, hay negativos en carbón e hidroeólica, y el total es matemáticamente redundante con la suma por componentes.
+\end{iaanalisis}
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Al revisar la generación veo:
+gen_fuel_gas solo tiene 10 valores no nulos y son de +/-0.001 MWh, hay días con valores negativos en gen_carbón y gen_hidroeólica. ¿Son errores de medida? gen_generación_total cuadra al céntimo con la suma del resto,quiero usar esta información para predecir la demanda a 7 días vista (t+1 a t+7). ¿Cómo debo tratar estos factores?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aquí tienes las decisiones técnicas que debes adoptar:
+
+1. **gen_fuel_gas:** Carece de varianza e información relevante (valores de 0.001 MWh son esencialmente cero en un sistema de decenas de miles de MWh). Debe descartarse del dataset para evitar ruido.
+2. **Generación negativa:** En el sistema eléctrico peninsular (REE), las cifras representan **generación neta inyectada a la red**. Si una central térmica o de bombeo está en parada o mantenimiento pero consume electricidad de la red para sus servicios auxiliares (refrigeración, bombas, iluminación), su balance neto es negativo. Es físicamente real y correcto, por lo que no deben eliminarse ni sustituirse por cero.
+3. **gen_generación_total:** Al ser la suma exacta de las demás tecnologías, es colineal y redundante al 100%. Debes conservar o bien las componentes desagregadas o bien el total, pero no ambas a la vez en modelos lineales para evitar multicolinealidad perfecta.
+4. **Disponibilidad temporal (Fuga de datos):** La generación de un día se conoce al finalizar dicho día. Si vas a predecir la demanda de los días $t+1$ a $t+7$ desde el día $t$, no dispones de la generación de esos días futuros. Por tanto, si utilizas la generación como variable exógena, solo puede incorporarse en forma de retardos ($t, t-1, \dots$).
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Nos basamos en esta explicación para decidir descartar `gen_fuel_gas`, mantener los negativos de carbón e hidroeólica, y no usar `gen_generación_total` junto con sus componentes de momento.
+\end{iaanalisis}
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Para pasar demanda_real de horario a diario tengo la opción de sumar las 24 horas (energía en MWh) o hacer la media de las 24 horas (potencia media en MW). ¿Cuál es metodológicamente más recomendable teniendo en cuenta los cambios de hora?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Es mucho más recomendable utilizar la **media diaria (en MW)**.
+
+La razón es la distorsión artificial que produce el cambio de hora:
+- Si usas la **suma horaria (MWh)**: el día del cambio de hora en primavera solo tiene 23 horas, por lo que su suma cae automáticamente un ~4.2% sin que haya habido una reducción real en la pauta de consumo de los ciudadanos. En otoño ocurre lo inverso (+4.2% por tener 25 horas). Estarías introduciendo saltos artificiales en la serie.
+- Si usas la **media horaria (MW)**: la potencia media dividida entre 23, 24 o 25 horas mide la misma intensidad de consumo promedio del día, siendo inmune a la duración en horas del día de calendario. Además, conserva la unidad original (MW).
+
+Para el análisis exploratorio inicial, si un día tiene menos de 23 horas de dato (los 6 días con hueco de 17 horas), es preferible marcarlo como nulo temporalmente en lugar de calcular una media sesgada con solo 7 horas nocturnas.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Es razonable, abajo se pide para que se añada esta comprobación en código.
+\end{iaanalisis}
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Escribe el código para agregar df_horario a diario con resample('D'), cuantificar la desviación porcentual de la suma frente a la media en los días de cambio de hora, y obtener la serie exploratoria de demanda diaria filtrando días con menos de 23 horas válidas.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+h = df_horario.set_index("fecha_hora")
+diario = h["demanda_real"].resample("D").agg(["mean", "sum", "count"])
+diario.index = diario.index.tz_localize(None)
+horas_dia = h["demanda_real"].resample("D").size()
+horas_dia.index = horas_dia.index.tz_localize(None)
+
+# Efecto de los cambios de hora sobre la suma diaria
+cambio_hora = horas_dia[horas_dia != 24].index
+efecto = (diario.loc[cambio_hora, "sum"] / (diario.loc[cambio_hora, "mean"] * 24) - 1).rename("suma vs media*24")
+print(pd.concat([horas_dia[cambio_hora].rename("horas"), efecto.map("{:+.1%}".format)], axis=1))
+
+demanda = diario["mean"].where(diario["count"] >= 23).rename("demanda_real")
+print(f"\nDías sin demanda diaria válida (hueco de 17 h): {demanda.isna().sum()}")
+demanda.describe()
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+El código muestra el impacto de los cambios de hora en la suma diaria y nos ayuda a tomar la decisión de usar la media diaria para la serie de demanda, filtrando los días con menos de 23 horas válidas que se dejaran como nulos ya que pueden afectar al resultado de la media.
+\end{iaanalisis}
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Quiero visualizar la serie de demanda diaria completa en un panel de dos gráficos: arriba: serie temporal completa con sombreado de estaciones meteorológicas (invierno, primavera, verano, otoño), media móvil de 30 días, puntos diferenciados para fines de semana y anotaciones para Filomena y las Navidades, abajo: zoom de 8 semanas (feb-abr 2022) sombreando los fines de semana para ver el ciclo semanal.
+Además, un cálculo impreso de la caída porcentual de demanda durante el periodo navideño frente a la semana laborable previa.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+import matplotlib.dates as mdates
+import matplotlib.ticker as mticker
+
+media_movil = demanda.rolling(30, center=True, min_periods=15).mean()
+finde = demanda.index.dayofweek >= 5
+
+# Estaciones meteorológicas: invierno dic-feb, primavera mar-may, verano jun-ago, otoño sep-nov
+ESTACIONES = {12: ("Invierno", AZUL), 3: ("Primavera", AQUA), 6: ("Verano", AMARILLO), 9: ("Otoño", NARANJA)}
+inicios = pd.date_range("2020-12-01", "2024-03-01", freq="3MS")
+
+fig, axes = plt.subplots(2, 1, figsize=(12, 7.5), gridspec_kw={"height_ratios": [1.5, 1], "hspace": 0.55})
+
+# (a) Serie completa con las estaciones sombreadas
+ax = axes[0]
+for ini, fin in zip(inicios[:-1], inicios[1:]):
+    nombre, color = ESTACIONES[ini.month]
+    a, b = max(ini, demanda.index[0]), min(fin, demanda.index[-1] + pd.Timedelta(days=1))
+    ax.axvspan(a, b, color=color, alpha=0.10, lw=0)
+    ax.text(a + (b - a) / 2, 1.0, nombre, transform=ax.get_xaxis_transform(), ha="center", va="bottom",
+            fontsize=8, color="#55554f")
+ax.plot(demanda.index, demanda, color=AZUL, lw=0.7, alpha=0.6, label="Media diaria")
+ax.scatter(demanda.index[finde], demanda[finde], s=6, color=GRIS, zorder=3, label="Sábados y domingos")
+ax.plot(media_movil.index, media_movil, color=NARANJA, lw=2, label="Media móvil de 30 días")
+# Episodios que se comentan en el texto
+ax.annotate("Filomena y ola de frío", xy=(pd.Timestamp("2021-01-11"), demanda["2021-01-11"]),
+            xytext=(pd.Timestamp("2021-02-25"), 36300), fontsize=8, color="#33332f", va="center",
+            arrowprops={"arrowstyle": "-", "color": "#55554f", "lw": 0.8})
+for anio in [2021, 2022, 2023]:
+    centro = pd.Timestamp(f"{anio}-12-31")
+    ax.annotate("Navidad", xy=(min(centro, demanda.index[-1]), 20400), xytext=(min(centro, demanda.index[-1] - pd.Timedelta(days=12)), 19000),
+                ha="center", fontsize=8, color="#33332f",
+                arrowprops={"arrowstyle": "-", "color": "#55554f", "lw": 0.8})
+ax.set_title("(a) Demanda real diaria (sistema peninsular) por estación", pad=18)
+ax.set_ylabel("MW")
+ax.set_xlim(demanda.index[0], demanda.index[-1])
+ax.set_ylim(18300, 37800)
+ax.legend(frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.09), ncol=3, fontsize=8)
+
+# (b) Zoom de ocho semanas para ver el patrón semanal
+zoom = demanda["2022-02-07":"2022-04-03"]
+ax = axes[1]
+for dia in zoom.index[zoom.index.dayofweek == 5]:
+    ax.axvspan(dia - pd.Timedelta(hours=12), dia + pd.Timedelta(hours=36), color=GRIS, alpha=0.15, lw=0)
+ax.plot(zoom.index, zoom, color=AZUL, lw=1.5, marker="o", ms=3)
+ax.set_title("(b) Detalle de ocho semanas (7 feb - 3 abr 2022); en gris, sábados y domingos")
+ax.set_ylabel("MW")
+ax.xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=0))
+MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: (lambda d: f"{d.day} {MESES[d.month - 1]}")(mdates.num2date(x))))
+
+fig.savefig(FIG_DIR / "eda_serie_diaria.png", bbox_inches="tight")
+plt.show()
+
+# Caída de Navidad: media de la semana laborable previa frente al periodo 24-dic a 6-ene
+for anio in [2021, 2022]:
+    antes = demanda[f"{anio}-12-13":f"{anio}-12-17"].mean()
+    navidad = demanda[f"{anio}-12-24":f"{anio + 1}-01-06"]
+    print(f"Navidad {anio}-{anio + 1}: semana 13-17 dic {antes:,.0f} MW | 24 dic-6 ene {navidad.mean():,.0f} MW "
+          f"({navidad.mean() / antes - 1:+.1%}) | mínimo {navidad.min():,.0f} MW el {navidad.idxmin():%d-%m-%Y}")
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+El gráfico compuesto permite observar de un vistazo tanto la componente macro (estacionalidad anual y tendencia) como la micro (patrón semanal regular de 7 días con valles en fin de semana) y singularidades como la borrasca Filomena.
+\end{iaanalisis}
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+En el gráfico de demanda diaria se observa un descenso abrupto de la media móvil en torno a fin de año en 2021-2022. ¿A qué responde exactamente esa caída invernal si el invierno suele ser época de máxima demanda? ¿Y qué componentes generales identificamos en la serie?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+La serie eléctrica presenta tres patrones estructurales y anomalías claras:
+
+1. **Estacionalidad semanal clara:** De lunes a viernes la actividad se mantiene en cotas altas, desciende moderadamente el sábado y alcanza su mínimo semanal el domingo, recuperándose enérgicamente el lunes.
+2. **Estacionalidad anual bimodal:** Existen dos picos de demanda máxima al año: en invierno (enero/febrero, debido a calefacción e iluminación) y en verano (julio, por climatización/aire acondicionado). En primavera y otoño, con climas más suaves, el consumo disminuye.
+3. **Tendencia de fondo:** Se aprecia una ligera tendencia decreciente interanual a lo largo del trienio (2021 a 2023).
+4. **La caída de fin de año (Efecto Navidad):** Aunque el invierno tiene una demanda global alta, entre el 24 de diciembre y el 6 de enero se produce una fuerte anomalía a la baja (en torno a un 14%-19% menos respecto a semanas laborables previas). Muchas industrias, oficinas, comercios y centros educativos cesan o reducen su actividad durante las dos semanas de vacaciones y festivos (Navidad, Año Nuevo, Reyes). Al aplicar una media móvil centrada de 30 días, ese valle pronunciado arrastra la curva hacia abajo justo entre finales de diciembre y comienzos de enero.
+
+A esto se suman eventos meteorológicos extremos como el pico récord de Filomena en enero de 2021 y las caídas puntuales por festivos en Semana Santa.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se da por válida la respuesta y se usa para la explicación del notebook.
+\end{iaanalisis}
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Genera el código para representar gráficamente el histograma de distribución de la demanda diaria ,un boxplot por día de la semana (Lunes a Domingo) y un boxplot por mes (1 a 12).
+Calcula también numéricamente las medias por día de la semana y la media anual de los 3 años.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+df_d = demanda.to_frame()
+df_d["dia_semana"] = df_d.index.dayofweek
+df_d["mes"] = df_d.index.month
+df_d["anio"] = df_d.index.year
+nombres_dia = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+
+fig, axes = plt.subplots(1, 3, figsize=(15, 4), gridspec_kw={"width_ratios": [1, 1.1, 1.6]})
+axes[0].hist(demanda.dropna(), bins=40, color=AZUL, edgecolor="white")
+axes[0].set_title("Distribución")
+axes[0].set_xlabel("MW")
+sns.boxplot(data=df_d, x="dia_semana", y="demanda_real", color=AZUL, ax=axes[1], fliersize=2,
+            boxprops={"alpha": 0.7})
+axes[1].set_xticks(range(7), nombres_dia)
+axes[1].set_title("Por día de la semana")
+sns.boxplot(data=df_d, x="mes", y="demanda_real", color=AZUL, ax=axes[2], fliersize=2,
+            boxprops={"alpha": 0.7})
+axes[2].set_title("Por mes")
+for ax in axes[1:]:
+    ax.set_xlabel("")
+    ax.set_ylabel("MW")
+fig.tight_layout()
+fig.savefig(FIG_DIR / "eda_distribucion_estacionalidad.png", bbox_inches="tight")
+plt.show()
+
+print("Media por día de la semana (MW):")
+print(df_d.groupby("dia_semana")["demanda_real"].mean().set_axis(nombres_dia).round(0).to_string())
+print("\nMedia anual (MW):")
+print(df_d.groupby("anio")["demanda_real"].mean().round(0).to_string())
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+El código cuantifica la caída porcentual de los fines de semana (sábado y domingo registran caídas medias muy significativas frente a días laborables) y la pauta bimodal mensual con máximos en enero y julio.
+\end{iaanalisis}
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Al analizar las medias anuales y mensuales vemos que el perfil anual se repite en forma pero no en nivel ni en fechas exactas de valles. Si usamos una variable como "día del año" (dayofyear de 1 a 365) para modelar la estacionalidad anual, ¿por qué no sería suficiente para captar eventos como Semana Santa o puentes?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+La variable `dayofyear` (día del año del 1 al 365) solo captura patrones fijos al calendario solar, pero fracasa con los siguientes factores:
+
+1. **Festivos móviles:** La Semana Santa cambia de fecha cada año (en 2021 cayó a primeros de abril, en 2022 a mediados y en 2023 a principios de mes). Sus caídas de consumo caen en días del año completamente distintos, por lo que una variable rígida de "día del año" no puede aprender ese efecto de forma unívoca.
+2. **Puentes festivos:** Los festivos nacionales fijos (como la Constitución el 6 de diciembre o el Pilar el 12 de octubre) caen en días de la semana distintos cada año; cuando caen en martes o jueves provocan puentes que hunden el consumo de los días laborables contiguos, algo que el día del año no refleja.
+3. **Tendencia interanual:** La demanda de 2023 es sistemáticamente más baja que la de 2021, lo que desplaza verticalmente el nivel medio de la serie.
+4. **Variabilidad climática extrema:** Olas de frío (Filomena en 2021) u olas de calor puntuales (como en junio de 2022) son shocks meteorológicos no periódicos. Sin variables de temperatura exógenas, estos picos y valles se convertirán en error irreducible para el modelo.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Esta reflexión justifica por qué es imprescindible incorporar librerías específicas de festivos y variables de retardo/calendario más sofisticadas que un simple índice de 1 a 365.
+\end{iaanalisis}
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+ya hemos cubierto la calidad del dato, huecos, agregación diaria y visualización general de la estacionalidad. q apartados metodológicos clave deberíamos dejar planteados a continuación para completar formalmente el análisis exploratorio de esta serie temporal antes de pasar al preprocesado y modelado?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Para que el análisis exploratorio sea metodológicamente riguroso en series temporales, debes dejar estructurados y desarrollar los siguientes bloques:
+
+1. **Efecto de los festivos:** Cuantificar el impacto que tienen los días festivos nacionales y autonómicos sobre el consumo eléctrico (contrastando si un festivo entre semana se comporta como un domingo).
+2. **Descomposición de la serie:** Descomponer formalmente la serie en tendencia, estacionalidad múltiple (semanal y anual) y residuo mediante técnicas como MSTL (Multiple Seasonal-Trend decomposition using LOESS).
+3. **Estacionariedad y autocorrelación:** Aplicar contrastes estadísticos formales (ADF, KPSS) para verificar estacionariedad, y graficar ACF/PACF para identificar retardos significativos ($t-1$, $t-7$, etc.).
+4. **Relación con las variables exógenas:** Estudiar la correlación cruzada entre la demanda y las tecnologías de generación diaria (eólica, solar, ciclos combinados) aplicando desfases temporales adecuados para evitar fugas de información.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Se crean las secciones correspondientes en el notebook (`### Efecto de los festivos`, `### Descomposición de la serie`, `### Estacionariedad y autocorrelación` y `## Relación con las variables exógenas`), dejando el cuaderno preparado y organizado para continuar con la siguiente fase del trabajo exploratorio.
+\end{iaanalisis}
 
 
 
