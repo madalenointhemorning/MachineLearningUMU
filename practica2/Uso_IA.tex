@@ -930,19 +930,342 @@ Se crean las secciones correspondientes en el notebook (`### Efecto de los festi
 
 
 
+
 \begin{iaprompt}
 \begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
-
+Cómo funciona la media móvil en series temporales Machine Learning
 \end{Verbatim}
 \end{iaprompt}
 \begin{iaresp}{Gemini Flash-Lite 3.5 en Gemini}
 \begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+En series temporales y machine learning, la media móvil calcula el promedio de una ventana de observaciones consecutivas que se desplaza en el tiempo para suavizar el ruido, revelar tendencias o actuar como variable predictora o componente de un modelo. [1] (https://www.ibm.com/es-es/think/topics/time-series-model), [2] (https://www.datacamp.com/es/tutorial/moving-averages-in-pandas), [3] (https://www.zometric.com/es/products/statistical-software/help/moving-average)
 
+Funcionamiento básico de la ventana móvil
+
+Una ventana de longitud n toma un subconjunto de datos pasados, calcula su promedio y avanza un paso incorporando el dato nuevo y descartando el más antiguo. [1] (https://rstudio-pubs-static.s3.amazonaws.com/448195_560955e5b25b4e8587751f6c8789e8b3.html), [2] (https://www.youtube.com/watch?v=70U0WYL5KHg&t=363), [3] (https://www.datacamp.com/es/tutorial/moving-averages-in-pandas)
+• Ventana corta: reacciona rápido a los cambios, pero conserva más ruido.
+• Ventana larga: suaviza más la serie y atenúa fluctuaciones o estacionalidad, aunque responde más lento a giros bruscos.
+• Regla clave: al calcular variables para predecir el futuro, usa solo datos disponibles hasta el instante actual para evitar fuga de datos (data leakage). [1] (https://www.youtube.com/watch?v=5h_j1M5_NTk&t=374), [2] (https://www.zometric.com/es/products/statistical-software/help/moving-average), [3] (https://rstudio-pubs-static.s3.amazonaws.com/448195_560955e5b25b4e8587751f6c8789e8b3.html)
+Este video explica el concepto de ventana móvil y cómo se desplaza paso a paso sobre una serie temporal:
+
+Tipos principales de medias móviles
+
+• Media móvil simple (SMA): asigna el mismo peso a todos los valores dentro de la ventana.
+• Media móvil exponencial (EMA): da mayor peso a las observaciones más recientes, reduciendo el retraso frente a cambios nuevos.
+• Componente MA en modelos estadísticos (ARIMA / ARMA): en estos modelos, la parte de moving average no promedia los valores de la serie, sino que modela la dependencia respecto a errores aleatorios pasados. [1] (https://masteres.ugr.es/estadistica-aplicada/sites/master/moea/public/inline-files/TFM_FernAndez%20SalgueroRicardo%20Alonzo.pdf), [2] (https://www.cmelitegroup.com/es/knowledge-hub/moving-averages/), [3] (https://es.linkedin.com/pulse/tiempedia-modelos-de-media-m%C3%B3vil-en-series-tiempo-mora-caballero-fpgie)
+
+Cómo se usa en machine learning
+
+En machine learning supervisado (como regresión lineal, Random Forest, XGBoost o redes neuronales), la serie temporal suele convertirse en una tabla con lags (valores pasados) y estadísticos de ventana: [1] (https://www.youtube.com/watch?v=MlktVhReO0E&t=697), [2] (https://www.ibm.com/es-es/think/topics/time-series-model)
+• Ingeniería de características (feature engineering): añadir medias móviles de distintas ventanas (por ejemplo, 7 o 30 días) ayuda al modelo a captar el nivel reciente o la tendencia local.
+• Estadísticos móviles complementarios: suele acompañarse de desviación estándar, mínimo o máximo móviles para medir volatilidad o cambios de régimen.
+• Análisis exploratorio y preprocesado: sirve para inspeccionar tendencias, evaluar si la media cambia en el tiempo (no estacionariedad) y detectar anomalías o desviaciones fuertes respecto al promedio local. [1] (https://www.youtube.com/watch?v=OGxPJfL5lJU&t=490), [2] (https://www.zometric.com/es/products/statistical-software/help/moving-average), [3] (https://www.ibm.com/es-es/think/topics/time-series-model)
+Para implementarlo en código, revisa la guía de medias móviles en pandas. [1] (https://www.datacamp.com/es/tutorial/moving-averages-in-pandas)
+Este video muestra cómo estructurar series temporales con ventanas y rezagos para algoritmos de machine learning:
+Si quieres aterrizarlo a tu caso, indícame:
+• El tipo de dato o dominio (finanzas, demanda, sensores, web) y su frecuencia (diaria, horaria, mensual)
+• Si buscas crear features para un modelo de ML, suavizar/explorar la serie o pronosticar
+Con esos datos puedo sugerirte ventanas iniciales y buenas prácticas de validación para evitar fugas de información.
 \end{Verbatim}
 \end{iaresp}
 \begin{iaanalisis}
-
+Para ampliar conocimientos de la media móvil frente a lo que viene en los apuntes, la respuesta añade el efecto del tamaño de ventana, distingue entre SMA, EMA y el componente MA de ARIMA/ARMA y explica cómo usarla como variable en modelos de ML junto con retardos y otros estadísticos móviles (desviación, mínimos y máximos).
 \end{iaanalisis}
+
+
+
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+entonces la media móvil no sirve para cuando vaya a entrenar, no? porque añade fuga de datos.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash-Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Sí sirve para entrenar, siempre y cuando se calcule desplazada hacia el pasado (shifted) para usar únicamente valores anteriores al instante que quieres predecir.
+La fuga de datos (data leakage) no ocurre por usar una media móvil, sino por incluir el valor objetivo actual (o valores futuros) dentro de la ventana de cálculo.
+
+Cómo ocurre la fuga y cómo evitarla
+
+Imagina que estás en el día t y quieres predecir el valor \(y_{t}\) (por ejemplo, las ventas de hoy):
+• Incorrecto (con fuga de datos): Calcular la media móvil estándar sobre \(y_{t}\), \(y_{t-1}\) e \(y_{t-2}\). Aquí estás usando \(y_{t}\) para predecir \(y_{t}\), información que en producción aún no existe. Lo mismo pasa si usas ventanas centradas (center=True).
+• Correcto (sin fuga de datos): Desplazar la serie al menos un paso hacia atrás antes de calcular la ventana (shift(1)). Así, para predecir \(y_{t}\), la media móvil promedia \(y_{t-1}\), \(y_{t-2}\) e \(y_{t-3}\).
+
+Ejemplo rápido en código (Python / pandas)
+
+Si quieres predecir la columna ventas en la fila t:
+python
+# MAL: incluye ventas[t] en el cálculo (hay fuga de datos)
+df['media_mal'] = df['ventas'].rolling(window=3).mean()
+
+# BIEN: desplaza 1 paso para usar solo t-1, t-2 y t-3
+df['media_bien'] = df['ventas'].shift(1).rolling(window=3).mean()
+Usa el código con precaución.
+• Excepción importante: Si calculas la media móvil sobre una variable exógena cuyo valor en el instante t ya conoces antes de predecir (por ejemplo, el pronóstico del clima para hoy o si hoy es festivo), no es obligatorio desplazarla.
+
+Qué tener en cuenta al dividir Train y Test
+
+Para evitar fugas sutiles entre conjuntos de datos:
+• Corte temporal estricto: Nunca dividas los datos de forma aleatoria (train_test_split estándar); usa validación cruzada temporal (TimeSeriesSplit) o un corte por fecha.
+• Cuidado con las primeras filas de Test: Las primeras observaciones del conjunto de prueba necesitan los últimos días del conjunto de entrenamiento para calcular su ventana móvil. Esto es válido porque en la vida real siempre conoces el pasado inmediato antes de hacer una predicción.
+Si me compartes:
+• El horizonte de predicción (si predices 1 paso adelante o varios días a la vez)
+• La librería o modelo que estás usando (pandas, scikit-learn, XGBoost, etc.)
+Puedo mostrarte cómo estructurar el cálculo y la predicción recursiva sin cometer fugas de datos.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+La respuesta aclara la duda corrigiendo el mito de que la media móvil siempre provoca fuga de datos. Explica cuándo sí es válida (desplazando la serie hacia el pasado para usar solo datos previos), matiza el caso de variables exógenas conocidas y advierte sobre el corte temporal entre train y test. Aplicado a la práctica de predecir la demanda\_real diaria de los próximos 7 días, me sirve para calcular medias móviles solo con información disponible hasta el día t (por ejemplo sobre demanda\_real, precio\_spot, pvpc o variables de ree\_generacion\_diaria.csv como gen\_eólica o gen\_solar\_fotovoltaica), evitar el uso futuro de demanda\_prevista o demanda\_programada si no están disponibles, hacer un corte temporal estricto en el periodo 2021-2023 y arrastrar el final de train a test sin colar datos posteriores.
+\end{iaanalisis}
+
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+en predicción de series temporales, si tengo picos por eventos meteorológicos y quiero predecir la demanda eléctrica real diaria, conviene ponerlos a NaN para mejorar la predicción de la serie o no?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash-Lite 3.5 en Gemini}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+No conviene ponerlos a NaN. Al convertir esos picos en valores nulos (y luego imputarlos o ignorarlos), estás eliminando la señal real de cómo responde el sistema eléctrico ante el clima extremo, lo que hará que tu modelo subestime sistemáticamente la demanda cuando vuelva a ocurrir un evento similar.
+Para predecir la demanda eléctrica real (y no solo la demanda base o "normal"), lo mejor es mantener esos datos y darle al modelo el contexto necesario para que entienda por qué ocurrieron.
+
+Qué hacer en su lugar
+
+• Incluye variables exógenas meteorológicas: Agrega temperatura (mínima, máxima, media), humedad, sensación térmica o radiación solar como regresores en tu modelo (ej. SARIMAX, Prophet, LightGBM, XGBoost). La relación entre temperatura y demanda eléctrica suele tener forma de "U" (sube mucho con el frío por calefacción y con el calor por aire acondicionado).
+• Crea variables de ingeniería de características (Feature Engineering):
+	• Grados-día (HDD y CDD): Heating Degree Days y Cooling Degree Days miden cuánto se desvía la temperatura de una base confortable (por ejemplo, 18 °C o 20 °C). Capturan muy bien la no linealidad de los picos.
+	• Efecto inercia (lags de clima): Una ola de calor o frío de tres días dispara más la demanda el tercer día que el primero porque los edificios pierden aislamiento térmico. Incluye medias móviles o rezagos de la temperatura.
+• Usa variables indicadoras (dummies) solo si es necesario: Si hubo un evento meteorológico histórico extremadamente atípico (como una borrasca histórica tipo Filomena) que rompió la infraestructura o provocó cortes de suministro (lo que artificialmente baja o distorsiona la demanda medida), ahí sí puedes usar una variable dummy para aislar ese efecto puntual sin borrar el dato.
+
+Cuándo SÍ deberías ponerlos a NaN
+
+Solo tiene sentido reemplazar por NaN e imputar si el pico no es demanda real, sino un error de medición (por ejemplo, un fallo en el contador o sensor que registró un valor imposible). Si el consumo eléctrico realmente ocurrió, el dato es válido y necesario para entrenar al modelo en escenarios de riesgo.
+Si me cuentas qué algoritmo o modelo estás usando (ej. ARIMA, Prophet, redes neuronales, árboles de decisión) y si tienes datos meteorológicos históricos y de pronóstico disponibles, te puedo sugerir cómo estructurar las variables para capturar esos picos.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+El objetivo de esta consulta es obtener una segunda opinión sobre cómo tratar los valores atípicos provocados por eventos meteorológicos extremos (como la borrasca Filomena) en la predicción de la demanda eléctrica. Además, la pregunta está formulada ligeramente apuntando a la idea de que imputarlos a NaN mejoraría para ver si la IA es capaz de contradecirme en vez de estar de acuerdo conmigo (nuestra verdadera idea es mantenerlos). Efectivamente, la IA expresa que no conviene imputarlos a NaN salvo que sea un error de medición (por ahora no se ha visto ninguno). Da algunas soluciones con variables exógenas, pero como no se tienen de carácter meteorológico, no se acepta la sugerencia.
+\end{iaanalisis}
+
+
+
+
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+df_d = demanda.to_frame() df_d["dia_semana"] = df_d.index.dayofweek df_d["mes"]
+= df_d.index.month df_d["anio"] = df_d.index.year nombres_dia = ["Lun", "Mar",
+"Mié", "Jue", "Vie", "Sáb", "Dom"]
+
+fig, axes = plt.subplots(1, 3, figsize=(15, 4), gridspec_kw={"width_ratios":
+[1, 1.1, 1.6]}) axes[0].hist(demanda.dropna(), bins=40, color=AZUL,
+edgecolor="white") axes[0].set_title("Distribución") axes[0].set_xlabel("MW")
+sns.boxplot(data=df_d, x="dia_semana", y="demanda_real", color=AZUL, ax=axes[1],
+fliersize=2, boxprops={"alpha": 0.7}) axes[1].set_xticks(range(7), nombres_dia)
+axes[1].set_title("Por día de la semana") sns.boxplot(data=df_d, x="mes",
+y="demanda_real", color=AZUL, ax=axes[2], fliersize=2, boxprops={"alpha": 0.7})
+axes[2].set_title("Por mes") for ax in axes[1:]: ax.set_xlabel("")
+ax.set_ylabel("MW") fig.tight_layout() fig.savefig(FIG_DIR /
+"eda_distribucion_estacionalidad.png", bbox_inches="tight") plt.show()
+
+print("Media por día de la semana (MW):")
+print(df_d.groupby("dia_semana")["demanda_real"].mean().set_axis(nombres_dia).round(0).to_string())
+print("\nMedia anual (MW):")
+print(df_d.groupby("anio")["demanda_real"].mean().round(0).to_string())
+
+Dado este código de ejemplo, hazme ahora una figura que tenga la evolución de la demanda real a lo largo del año, pero separando los 3 años de 2021, 2022 y 2023 y otra figura que sea un boxplot por mes (también mostrando los 3 años en cada mes). Méteme una media móvil semanal para que se suavice el ruido y se pueda ver mejor la tendencia anual.
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Para lograr lo que pides, necesitamos trabajar con las fechas de forma que podamos comparar los tres años (2021, 2022, 2023) en un mismo eje temporal (por ejemplo, superponiendo los días del año) o agrupando de manera adecuada.
+
+Asumiendo que demanda es una serie de Pandas con un índice Datetime y que ya tienes df_d creado del bloque anterior, aquí tienes el código para generar una figura conjunta con los dos gráficos solicitados siguiendo el mismo estilo visual (usando la variable AZUL y FIG_DIR de tu ejemplo):
+
+# Preparamos los datos añadiendo el día del año para superponer las series anuales
+df_perfil = demanda.to_frame()
+df_perfil["dia_anio"] = df_perfil.index.dayofyear
+df_perfil["anio"] = df_perfil.index.year
+
+# Creamos la figura con dos subgráficos en una fila
+fig, axes = plt.subplots(1, 2, figsize=(15, 4.5), gridspec_kw={"width_ratios": [1.4, 1]})
+
+# Definimos una paleta de colores para diferenciar los tres años
+colores = {2021: AZUL, 2022: "#ff7f0e", 2023: "#2ca02c"}
+
+# 1. Evolución anual suavizada con media móvil semanal
+for anio, color in colores.items():
+    sub = df_perfil[df_perfil["anio"] == anio]
+    # Aplicamos media móvil de 7 días para eliminar el ruido de los fines de semana
+    suavizado = sub["demanda_real"].rolling(window=7, center=True).mean()
+    axes[0].plot(sub["dia_anio"], suavizado, label=str(anio), color=color, linewidth=1.8)
+
+axes[0].set_title("Evolución anual de la demanda (media móvil 7 días)")
+axes[0].set_xlabel("Día del año")
+axes[0].set_ylabel("MW")
+axes[0].legend(title="Año")
+
+# 2. Boxplot mensual desagregado por año
+sns.boxplot(
+    data=df_d,
+    x="mes",
+    y="demanda_real",
+    hue="anio",
+    palette=colores,
+    ax=axes[1],
+    fliersize=2,
+    boxprops={"alpha": 0.7},
+)
+axes[1].set_title("Distribución mensual por año")
+axes[1].set_xlabel("Mes")
+axes[1].set_ylabel("MW")
+axes[1].legend(title="Año")
+
+fig.tight_layout()
+fig.savefig(FIG_DIR / "eda_evolucion_anual.png", bbox_inches="tight")
+plt.show()
+
+Explicación de los cambios:
+
+1. Gráfica de líneas (Panel izquierdo): Extraemos dayofyear (del 1 al 365) para alinear los tres años en el mismo eje X y aplicamos .rolling(window=7, center=True).mean() para suavizar los bajones de los fines de semana y que se vea limpia la tendencia estacional.
+2. Boxplot agrupado (Panel derecho): Al añadir hue="anio" a sns.boxplot, Seaborn agrupa automáticamente las cajas por mes y genera tres cajitas (una por cada año) en cada una de las 12 posiciones mensuales, manteniendo la misma estética de fliersize y transparencia (alpha) de tu código original.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+La figura sale como pedía, pero al aplicarlo me aparecen huecos en la línea de la media móvil. En la práctica, si esto pasa al calcular variables para predecir la demanda\_real a 7 días con skforecast, hay que tener cuidado con los días incompletos o sin datos para que no se me rompan las ventanas ni arrastren nulos.
+\end{iaanalisis}
+
+
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Oye, he ejecutado el código y el boxplot de la derecha sale bien, pero en la gráfica de la izquierda las líneas salen cortadas a trozos, como con huecos en blanco en medio. ¿Por qué pasa esto si yo solo tenía un par de días sueltos con NaN en la serie? ¿Cómo lo arreglo para que se vea la línea continua?
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Eso ocurre por cómo funciona por defecto el método .rolling(7) en Pandas. Cuando calculas una media móvil de 7 días, Pandas exige que los 7 valores de esa ventana sean válidos; si hay un solo día con NaN, el resultado de toda la ventana pasa a ser NaN. Por eso, un único día faltante te "contagia" a los 3 días anteriores y a los 3 posteriores, creando un hueco de una semana entera en la línea.
+
+En el boxplot de la derecha no lo notas porque Seaborn simplemente ignora los NaN al calcular los cuartiles de cada mes.
+
+Para solucionarlo sin modificar tu serie original (ni alterar los datos reales del boxplot), lo mejor es crear una copia temporal interpolada linealmente únicamente para dibujar la curva suavizada, y añadir min_periods=1 en el rolling para que tampoco corte los extremos del año:
+
+# Interpolación lineal solo para visualización (evita cortes en la curva sin alterar la serie original)
+demanda_vis = demanda.interpolate(method="linear")
+df_perfil = demanda_vis.to_frame()
+df_perfil["dia_anio"] = df_perfil.index.dayofyear
+df_perfil["anio"] = df_perfil.index.year
+df_perfil["mes"] = df_perfil.index.month
+
+# Creamos la figura con dos subgráficos en una fila
+fig, axes = plt.subplots(1, 2, figsize=(15, 4.5), gridspec_kw={"width_ratios": [1.4, 1]})
+
+# Paleta de colores para diferenciar cada año
+paleta_anios = {2021: AZUL, 2022: NARANJA, 2023: AQUA}
+
+# (a) Perfil de demanda a lo largo del año suavizado con media móvil semanal
+for anio, color in paleta_anios.items():
+    sub = df_perfil[df_perfil["anio"] == anio]
+    # Añadimos min_periods=1 para calcular la media también en los bordes de enero y diciembre
+    sub_suave = sub["demanda_real"].rolling(7, center=True, min_periods=1).mean()
+    axes[0].plot(
+        sub["dia_anio"],
+        sub_suave,
+        label=str(anio),
+        color=color,
+        lw=1.8,
+    )
+
+axes[0].set_title("(a) Evolución estacional anual (media móvil 7 días)")
+axes[0].set_xlabel("Día del año (1 a 365)")
+axes[0].set_ylabel("MW")
+axes[0].legend(frameon=False, title="Año")
+
+# (b) Boxplot mensual segregado por año (usando df_d original sin interpolar)
+sns.boxplot(
+    data=df_d,
+    x="mes",
+    y="demanda_real",
+    hue="anio",
+    palette=paleta_anios,
+    ax=axes[1],
+    fliersize=1.5,
+    boxprops={"alpha": 0.8},
+)
+axes[1].set_title("(b) Distribución mensual por año")
+axes[1].set_xlabel("Mes")
+axes[1].set_ylabel("MW")
+axes[1].legend(frameon=False, title="Año", loc="upper right")
+
+fig.tight_layout()
+fig.savefig(FIG_DIR / "eda_comparativa_anual.png", bbox_inches="tight")
+plt.show()
+
+Explicación de los cambios:
+
+1. Copia interpolada (demanda_vis): Aplicamos .interpolate(method="linear") sobre una copia de la serie antes de calcular la media móvil. Así rellenamos los días aislados con el promedio entre el día anterior y el siguiente para que la línea sea continua, manteniendo df_d intacto para el boxplot.
+2. Parámetro min_periods=1: Lo añadimos dentro de .rolling() para que en los primeros y últimos días de cada año (donde la ventana centrada de 7 días no está completa) calcule la media con los días disponibles en lugar de dejar esos bordes en blanco.
+3. Ajustes visuales: Se unificó la paleta en paleta_anios, se limpiaron los marcos de las leyendas con frameon=False y se etiquetaron ambos paneles con (a) y (b) para facilitar su referencia en la memoria.
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+La IA explica que el hueco sale porque la media móvil de 7 días necesita todos los valores de la ventana y que, si hay algún día sin datos, corta alrededor y precisamente hay 6 días que están a NaN por tener pocos datos de demanda\_real cuando estaba en horas. Para arreglarlo en el gráfico propone interpolar linealmente una copia y poner min\_periods=1. Para el proyecto, esto me sirve para dejar la gráfica limpia sin tocar los datos originales. También deja claro que para entrenar en skforecast tendré que revisar bien cómo están los días incompletos y no meter medias centradas como variables de entrada porque sería fuga de datos.
+\end{iaanalisis}
+
+
+
+
+
+\begin{iaprompt}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+benceno = X_train[objetivo] fig, axs = plt.subplots(1, 2, figsize=(14, 4)) acf =
+[benceno.autocorr(lag=k) for k in range(1, 22)] axs[0].bar(range(1, 22), acf)
+axs[0].set_xlabel('Retardo (días)') axs[0].set_ylabel('Autocorrelación')
+axs[0].set_title('Autocorrelación del benceno') dias = ['Lun', 'Mar', 'Mié',
+'Jue', 'Vie', 'Sáb', 'Dom'] media_dia =
+benceno.groupby(benceno.index.dayofweek).mean() axs[1].bar(dias,
+media_dia.values) axs[1].set_ylabel('Benceno medio (µg/m³)')
+axs[1].set_title('Benceno medio por día de la semana') fig.tight_layout()
+plt.show()
+
+Adáptalo para el análisis de nuestro objetivo
+
+\end{Verbatim}
+\end{iaprompt}
+\begin{iaresp}{Gemini Flash 3.8 en Google AI Studio}
+\begin{Verbatim}[fontsize=\small, breaklines=true, breaksymbol=]
+Aquí tienes el bloque adaptado exactamente con la misma lógica aplicado a nuestra serie demanda_real:
+
+# %%
+demanda_serie = demanda_vis
+fig, axs = plt.subplots(1, 2, figsize=(14, 4))
+acf = [demanda_serie.autocorr(lag=k) for k in range(1, 22)]
+axs[0].bar(range(1, 22), acf)
+axs[0].set_xlabel('Retardo (días)')
+axs[0].set_ylabel('Autocorrelación')
+axs[0].set_title('Autocorrelación de la demanda')
+dias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+media_dia = demanda_serie.groupby(demanda_serie.index.dayofweek).mean()
+axs[1].bar(dias, media_dia.values)
+axs[1].set_ylabel('Demanda media (MW)')
+axs[1].set_title('Demanda media por día de la semana')
+fig.tight_layout()
+plt.show()
+\end{Verbatim}
+\end{iaresp}
+\begin{iaanalisis}
+Para adaptar el código que muestra el análisis de autocorrelación y estacionalidad semanal de la Práctica III a nuestra serie.
+\end{iaanalisis}
+
+
 
 
 
